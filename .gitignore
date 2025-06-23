@@ -1,71 +1,143 @@
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
+# ============================
+# 📦 General
+# ============================
 .DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
+*.lock
+*.tmp
+*.log
+*.swp
+*.class
+*.pyc
+*.apk
+*.aab
+*.dex
+*.keystore
+*.jks
+Thumbs.db
+Icon?
+*.icloud
+hs_err_pid*
 
-# IntelliJ related
+# ============================
+# 🧪 IDE & Tool Settings
+# ============================
+.idea/
+.vscode/
 *.iml
 *.ipr
 *.iws
-.idea/
 
-# VSCode
-.vscode/
+# Android Studio & IntelliJ
+.navigation/
+captures/
+.gradle/
+*/build/
+*/out/
+*/local.properties
 
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
+# Xcode/macOS
+*.xcuserstate
+*.xcworkspace
+*.xcodeproj
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.moved-aside
+*.xcuserdata/
+*.DS_Store
+.AppleDouble
+.LSOverride
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# ============================
+# 🚀 Dart & Flutter
+# ============================
 .dart_tool/
+.packages
+.pub/
+.pub-cache/
+build/
+coverage/
 .flutter-plugins
 .flutter-plugins-dependencies
-.pub-cache/
-.pub/
-build/
-.packages
 flutter_export_environment.sh
 
-# iOS
-ios/Flutter/Flutter.framework
-ios/Flutter/Flutter.podspec
-ios/Runner.xcworkspace/
-ios/Pods/
+# Flutter specific generated files
+lib/generated_plugin_registrant.dart
+**/doc/api/
+**/ios/Flutter/.last_build_id
+
+# Flutter iOS
+ios/Flutter/
 ios/.symlinks/
-ios/Flutter/Generated.xcconfig
+ios/Pods/
 ios/.dart_tool/
 ios/Podfile.lock
+ios/Runner.xcworkspace/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
 
-# Android
+# Flutter Android
 android/.gradle/
 android/captures/
 android/.idea/
 android/local.properties
 android/.settings/
+android/key.properties
+android/**/GeneratedPluginRegistrant.java
 
-# 환경변수
+# Flutter macOS
+macos/Flutter/
+macos/Pods/
+macos/.symlinks/
+macos/Flutter/Generated.xcconfig
+
+# Flutter Linux & Windows
+linux/
+windows/
+
+# ============================
+# 🔐 Security / Environment
+# ============================
 .env
 .env.*
+key.properties
+google-services.json
+firebase-options.json
+secrets.json
+lib/secrets.dart
+lib/api_keys.dart
 
-# 로그 및 기타
-*.lock
-*.tmp
-Thumbs.db
+# ============================
+# 🧹 Build & Generated
+# ============================
+bin/
+gen/
+out/
+*.js
+*.js.map
+*.js.deps
+*.js_
+*.dart.js
+*.info.json
 
-# Symbolication related
-app.*.symbols
-
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+# ============================
+# 🔍 Exceptions
+# ============================
+!/gradle/wrapper/gradle-wrapper.jar
+!**/ios/**/default.pbxuser
+!**/ios/**/default.mode1v3
+!**/ios/**/default.mode2v3
+!**/ios/**/default.perspectivev3
