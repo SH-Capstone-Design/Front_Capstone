@@ -1,14 +1,25 @@
-gradle-wrapper.jar
-/.gradle
-/captures/
-/gradlew
-/gradlew.bat
-/local.properties
-GeneratedPluginRegistrant.java
-.cxx/
+# Gradle 빌드 파일 및 캐시
+.gradle/
+build/
 
-# Remember to never publicly share your keystore.
-# See https://flutter.dev/to/reference-keystore
+# Gradle 래퍼 실행파일 (보통 포함하지만, 필요에 따라 무시 가능)
+gradle-wrapper.jar
+gradlew
+gradlew.bat
+
+# Android Studio 캡처 및 임시 파일
+captures/
+
+# 로컬 환경 설정 파일 (SDK 경로 등, 공유 금지)
+local.properties
 key.properties
+
+# 서명 키 파일 (보안상 절대 커밋 금지)
 **/*.keystore
 **/*.jks
+
+# Flutter 자동 생성 파일 (필요 시 무시)
+**/GeneratedPluginRegistrant.java
+
+# NDK 빌드 임시 파일
+.cxx/

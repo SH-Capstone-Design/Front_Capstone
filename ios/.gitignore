@@ -1,20 +1,24 @@
-**/dgph
+# iOS Xcode 개인 파일
 *.mode1v3
 *.mode2v3
 *.moved-aside
 *.pbxuser
 *.perspectivev3
-**/*sync/
-.sconsign.dblite
-.tags*
-**/.vagrant/
-**/DerivedData/
-Icon?
-**/Pods/
-**/.symlinks/
+!default.mode1v3
+!default.mode2v3
+!default.pbxuser
+!default.perspectivev3
+
+xcuserdata/
+DerivedData/
 profile
-xcuserdata
-**/.generated/
+Icon?
+
+# CocoaPods
+Pods/
+.symlinks/
+
+# Flutter 빌드 산출물
 Flutter/App.framework
 Flutter/Flutter.framework
 Flutter/Flutter.podspec
@@ -24,11 +28,10 @@ Flutter/app.flx
 Flutter/app.zip
 Flutter/flutter_assets/
 Flutter/flutter_export_environment.sh
-ServiceDefinitions.json
+
+# 자동 생성 플러그인 등록
 Runner/GeneratedPluginRegistrant.*
 
-# Exceptions to above rules.
-!default.mode1v3
-!default.mode2v3
-!default.pbxuser
-!default.perspectivev3
+# 자동 생성 코드
+.generated/
+
