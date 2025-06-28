@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AuthService {
-  final String baseUrl = dotenv.env['BASE_URL'] ?? 'https://default-url.com/api';
+  final String baseUrl = dotenv.env['BASE_URL']!;
 
   Future<String?> requestLoginToken(String email, String password) async {
     final url = Uri.parse('$baseUrl/login');

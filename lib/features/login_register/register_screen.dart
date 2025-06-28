@@ -30,7 +30,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (token != null) {
       print('회원가입 성공, 토큰: $token');
-      // TODO: 토큰 저장 및 화면 이동 처리
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('회원가입 성공!')),
       );
