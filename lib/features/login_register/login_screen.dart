@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../services/auth_service.dart'; 
+import '../../services/auth_service.dart';
+import 'widgets/email_input.dart';
+import 'widgets/password_input.dart';
+import 'widgets/login_button.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -42,26 +45,39 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("로그인")),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: emailController,
-              decoration: const InputDecoration(labelText: '이메일'),
-            ),
-            TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: '비밀번호'),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _login,
-              child: const Text('로그인'),
-            ),
-          ],
+      backgroundColor: const Color(0xFFFFF6FB), // 연핑크 배경
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text(
+          "로그인",
+          style: TextStyle(color: Colors.black),
+        ),
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.black),
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Connect Beat",
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 32),
+              EmailInput(controller: emailController),
+              const SizedBox(height: 16),
+              PasswordInput(controller: passwordController),
+              const SizedBox(height: 32),
+              LoginButton(onPressed: _login),
+            ],
+          ),
         ),
       ),
     );

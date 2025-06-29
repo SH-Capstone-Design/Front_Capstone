@@ -1,0 +1,37 @@
+# iOS Xcode 개인 파일
+*.mode1v3
+*.mode2v3
+*.moved-aside
+*.pbxuser
+*.perspectivev3
+!default.mode1v3
+!default.mode2v3
+!default.pbxuser
+!default.perspectivev3
+
+xcuserdata/
+DerivedData/
+profile
+Icon?
+
+# CocoaPods
+Pods/
+.symlinks/
+
+# Flutter 빌드 산출물
+Flutter/App.framework
+Flutter/Flutter.framework
+Flutter/Flutter.podspec
+Flutter/Generated.xcconfig
+Flutter/ephemeral/
+Flutter/app.flx
+Flutter/app.zip
+Flutter/flutter_assets/
+Flutter/flutter_export_environment.sh
+
+# 자동 생성 플러그인 등록
+Runner/GeneratedPluginRegistrant.*
+
+# 자동 생성 코드
+.generated/
+

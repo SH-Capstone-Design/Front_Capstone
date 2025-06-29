@@ -2,6 +2,8 @@
 # 📦 General
 # ============================
 .DS_Store
+Thumbs.db
+Icon?
 *.lock
 *.tmp
 *.log
@@ -13,8 +15,6 @@
 *.dex
 *.keystore
 *.jks
-Thumbs.db
-Icon?
 *.icloud
 hs_err_pid*
 
@@ -35,7 +35,9 @@ captures/
 */out/
 */local.properties
 
-# Xcode/macOS
+# ============================
+# 🖥 macOS / Xcode
+# ============================
 *.xcuserstate
 *.xcworkspace
 *.xcodeproj
@@ -45,7 +47,6 @@ captures/
 *.perspectivev3
 *.moved-aside
 *.xcuserdata/
-*.DS_Store
 .AppleDouble
 .LSOverride
 .DocumentRevisions-V100
@@ -74,12 +75,14 @@ coverage/
 .flutter-plugins-dependencies
 flutter_export_environment.sh
 
-# Flutter specific generated files
+# Flutter Generated Files
 lib/generated_plugin_registrant.dart
 **/doc/api/
 **/ios/Flutter/.last_build_id
 
-# Flutter iOS
+# ============================
+# 📱 Flutter iOS
+# ============================
 ios/Flutter/
 ios/.symlinks/
 ios/Pods/
@@ -89,7 +92,9 @@ ios/Runner.xcworkspace/
 ios/Flutter/Generated.xcconfig
 ios/Flutter/flutter_export_environment.sh
 
-# Flutter Android
+# ============================
+# 🤖 Flutter Android
+# ============================
 android/.gradle/
 android/captures/
 android/.idea/
@@ -98,13 +103,17 @@ android/.settings/
 android/key.properties
 android/**/GeneratedPluginRegistrant.java
 
-# Flutter macOS
+# ============================
+# 💻 Flutter macOS
+# ============================
 macos/Flutter/
 macos/Pods/
 macos/.symlinks/
 macos/Flutter/Generated.xcconfig
 
-# Flutter Linux & Windows
+# ============================
+# 🐧 Flutter Linux & Windows
+# ============================
 linux/
 windows/
 
@@ -134,7 +143,7 @@ out/
 *.info.json
 
 # ============================
-# 🔍 Exceptions
+# 🔍 Exceptions (Keep these tracked)
 # ============================
 !/gradle/wrapper/gradle-wrapper.jar
 !**/ios/**/default.pbxuser

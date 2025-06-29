@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../services/auth_service.dart'; 
+import '../../services/auth_service.dart';
+import 'widgets/email_input.dart';
+import 'widgets/password_input.dart';
+import 'widgets/register_button.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -16,6 +19,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final AuthService authService = AuthService();
 
   Future<void> _register() async {
+    FocusScope.of(context).unfocus();
+
+    if (emailController.text.trim().isEmpty ||
+        passwordController.text.isEmpty ||
+        confirmController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('모든 필드를 입력해 주세요')),
+      );
+      return;
+    }
+
     if (passwordController.text != confirmController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('비밀번호가 일치하지 않습니다')),
@@ -23,19 +37,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    final token = await authService.requestRegisterToken(
-      emailController.text,
-      passwordController.text,
-    );
-
-    if (token != null) {
-      print('회원가입 성공, 토큰: $token');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('회원가입 성공!')),
+    try {
+      final token = await authService.requestRegisterToken(
+        emailController.text.trim(),
+        passwordController.text,
       );
-    } else {
+
+      if (token != null) {
+        print('회원가입 성공, 토큰: $token');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('회원가입 성공!')),
+        );
+        // 회원가입 성공 후 화면 이동 등 처리 여기에 추가 가능
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('회원가입 실패')),
+        );
+      }
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('회원가입 실패')),
+        SnackBar(content: Text('오류 발생: $e')),
       );
     }
   }
@@ -51,31 +72,41 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("회원가입")),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: emailController,
-              decoration: const InputDecoration(labelText: '이메일'),
-            ),
-            TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: '비밀번호'),
-            ),
-            TextField(
-              controller: confirmController,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: '비밀번호 확인'),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _register,
-              child: const Text('회원가입'),
-            ),
-          ],
+      backgroundColor: const Color(0xFFFFF6FB),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text(
+          "회원가입",
+          style: TextStyle(color: Colors.black),
+        ),
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.black),
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Connect Beat",
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 32),
+              EmailInput(controller: emailController),
+              const SizedBox(height: 16),
+              PasswordInput(controller: passwordController),
+              const SizedBox(height: 16),
+              PasswordInput(controller: passwordController),
+              const SizedBox(height: 32),
+              RegisterButton(onPressed: _register),
+            ],
+          ),
         ),
       ),
     );
