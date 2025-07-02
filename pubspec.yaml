@@ -10,6 +10,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  kakao_flutter_sdk: ^1.6.0
+  google_sign_in: ^7.1.0
+  firebase_auth: ^4.9.0
 
   flutter_riverpod: ^2.3.6
   cupertino_icons: ^1.0.8
@@ -24,3 +27,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/logo.png

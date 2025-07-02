@@ -19,12 +19,10 @@ class MainScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(32),
                   margin: const EdgeInsets.only(bottom: 60),
                   color: Colors.white,
-                  child: Text(
-                    AppConstants.appName,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    height: 48, // 원하는 크기로 조절 (예시)
+                    fit: BoxFit.contain,
                   ),
                 ),
                 RoundedButton(
