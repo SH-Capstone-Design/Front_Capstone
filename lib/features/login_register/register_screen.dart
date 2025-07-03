@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../services/auth_service.dart';
+import '../../core/services/auth_service.dart';
 import 'widgets/email_input.dart';
 import 'widgets/password_input.dart';
 import 'widgets/register_button.dart';
@@ -29,6 +29,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
       return;
     }
+
 
     if (passwordController.text != confirmController.text) {
       ScaffoldMessenger.of(context).showSnackBar(

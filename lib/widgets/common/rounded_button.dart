@@ -3,11 +3,19 @@ import 'package:flutter/material.dart';
 class RoundedButton extends StatelessWidget {
   final String text;
   final VoidCallback onPressed;
+  final double height;
+  final double width;
+  final double fontSize;
+  final TextStyle? textStyle;
 
   const RoundedButton({
     super.key,
     required this.text,
     required this.onPressed,
+    this.width = double.infinity,
+    this.height = 56,
+    this.fontSize = 22,
+    this.textStyle,
   });
 
   @override
@@ -27,7 +35,7 @@ class RoundedButton extends StatelessWidget {
         onPressed: onPressed,
         child: Text(
           text,
-          style: const TextStyle(fontSize: 18),
+          style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w600),
         ),
       ),
     );

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:connectbeat/core/constants.dart'; // 전역 상수 가져오기
-import '../widgets/common/rounded_button.dart';
+import 'package:connectbeat/core/utils/constants.dart'; // 전역 상수 가져오기
+import '../../widgets/common/rounded_button.dart';
 
 class MainScreen extends StatelessWidget {
   const MainScreen({super.key});
@@ -27,10 +27,16 @@ class MainScreen extends StatelessWidget {
                 ),
                 RoundedButton(
                   text: '로그인 하기',
+                  textStyle: TextStyle(
+                    fontSize: 20,
+                  ),
                   onPressed: () => Navigator.pushNamed(context, '/login'),
                 ),
                 const SizedBox(height: 16),
                 RoundedButton(
+                  textStyle: TextStyle(
+                    fontSize: 20,
+                  ),
                   text: '회원가입',
                   onPressed: () => Navigator.pushNamed(context, '/register'),
                 ),

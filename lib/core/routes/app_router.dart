@@ -1,7 +1,7 @@
 // lib/app_router.dart
 import 'package:flutter/material.dart';
-import 'features/login_register/login_screen.dart';
-import 'features/login_register/register_screen.dart';
+import '../../features/login_register/login_screen.dart';
+import '../../features/login_register/register_screen.dart';
 
 class AppRouter {
   static Route<dynamic> generateRoute(RouteSettings settings) {

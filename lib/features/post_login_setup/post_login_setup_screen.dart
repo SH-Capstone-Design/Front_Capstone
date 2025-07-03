@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'widgets/couple_connect_button.dart';
 import 'widgets/nickname_setting_button.dart';
 import 'widgets/profile_setting_button.dart';
+import '../../features/couple_connect/screens/couple_connect_screen.dart';
 
 class PostLoginSetupScreen extends StatelessWidget {
   const PostLoginSetupScreen({Key? key}) : super(key: key);
@@ -13,10 +14,10 @@ class PostLoginSetupScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
+        // leading: IconButton(
+        //   icon: const Icon(Icons.arrow_back, color: Colors.black),
+        //   onPressed: () => Navigator.pop(context),
+        // ),
       ),
       body: SafeArea(
         child: Column(
@@ -54,7 +55,16 @@ class PostLoginSetupScreen extends StatelessWidget {
             const SizedBox(height: 8),
             const NicknameSettingButton(),
             const Spacer(),
-            const CoupleConnectButton(),
+            CoupleConnectButton(
+              onPressed: () {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CoupleCodeScreen(),
+                  ),
+                );
+              },
+            ),
             const SizedBox(height: 32),
           ],
 

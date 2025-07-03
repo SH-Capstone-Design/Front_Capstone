@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'features/social_login/social_login_screen.dart';
 
-import 'screens/main_screen.dart';
-import 'app_router.dart';
+import 'features/main/main_screen.dart';
+import 'core/routes/app_router.dart';
 
 void main() {
   runApp(
@@ -27,7 +28,7 @@ class MyApp extends StatelessWidget {
         ),
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.pinkAccent),
       ),
-      home: const MainScreen(),
+      home: const SocialLoginScreen(),  //MainScreen(),
       onGenerateRoute: AppRouter.generateRoute,
     );
   }

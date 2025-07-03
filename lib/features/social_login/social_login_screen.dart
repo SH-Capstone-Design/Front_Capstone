@@ -1,9 +1,10 @@
+import 'package:connectbeat/features/post_login_setup/post_login_setup_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../widgets/common/kakao_login_button.dart';
-import '../widgets/common/google_login_button.dart';
-import '../services/google_login_service.dart';
+import '../../widgets/common/kakao_login_button.dart';
+import '../../widgets/common/google_login_button.dart';
+import '../../core/services/google_login_service.dart';
 
 class SocialLoginScreen extends ConsumerWidget {
   const SocialLoginScreen({super.key});
@@ -31,11 +32,25 @@ class SocialLoginScreen extends ConsumerWidget {
                   final user = await googleLoginService.signInWithGoogle();
                   if (user != null) {
                     print('구글 로그인 성공: ${user.email}');
+                    if (!context.mounted) return;
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const PostLoginSetupScreen(),
+                      ),
+                    );
                   } else {
                     print('구글 로그인 실패 또는 취소');
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('구글 로그인 실패 또는 취소'),
+                      ),
+                    );
                   }
                 },
               ),
+
             ],
           ),
         ),
