@@ -35,9 +35,16 @@ class CoupleCodeScreen extends StatelessWidget {
                   fit: BoxFit.contain,
                 ),
               ),
+
               CoupleCodeCreateButton(
+
                 onPressed: () {
                   // TODO: 커플 코드 생성 기능 연결
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const CoupleCodeScreen()),
+                  );
                 },
               ),
               const SizedBox(height: 20),

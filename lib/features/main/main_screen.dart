@@ -21,7 +21,7 @@ class MainScreen extends StatelessWidget {
                   color: Colors.white,
                   child: Image.asset(
                     'assets/images/logo.png',
-                    height: 48, // 원하는 크기로 조절 (예시)
+                    height: 20,
                     fit: BoxFit.contain,
                   ),
                 ),
@@ -30,16 +30,16 @@ class MainScreen extends StatelessWidget {
                   textStyle: TextStyle(
                     fontSize: 20,
                   ),
-                  onPressed: () => Navigator.pushNamed(context, '/login'),
+                  onPressed: () => Navigator.pushNamed(context, '/social_login'),
                 ),
                 const SizedBox(height: 16),
-                RoundedButton(
+                /*RoundedButton(
                   textStyle: TextStyle(
                     fontSize: 20,
                   ),
                   text: '회원가입',
                   onPressed: () => Navigator.pushNamed(context, '/register'),
-                ),
+                ),*/
               ],
             ),
           ),

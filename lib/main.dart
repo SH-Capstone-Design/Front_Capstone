@@ -28,7 +28,7 @@ class MyApp extends StatelessWidget {
         ),
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.pinkAccent),
       ),
-      home: const SocialLoginScreen(),  //MainScreen(),
+      home: const MainScreen(), //SocialLoginScreen(),
       onGenerateRoute: AppRouter.generateRoute,
     );
   }
