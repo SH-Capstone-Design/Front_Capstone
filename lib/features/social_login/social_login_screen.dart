@@ -1,4 +1,4 @@
-import 'package:connectbeat/features/post_login_setup/post_login_setup_screen.dart';
+import 'package:connectbeat/features/post_login_setup/screens/post_login_setup_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

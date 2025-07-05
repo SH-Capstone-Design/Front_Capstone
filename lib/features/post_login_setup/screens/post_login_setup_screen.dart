@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'widgets/couple_connect_button.dart';
-import 'widgets/nickname_setting_button.dart';
-import 'widgets/profile_setting_button.dart';
-import '../../features/couple_connect/screens/couple_connect_screen.dart';
+import '../widgets/couple_connect_button.dart';
+import '../widgets/nickname_setting_button.dart';
+import '../widgets/profile_setting_button.dart';
+import '../../couple_connect/screens/couple_connect_screen.dart';
 
 class PostLoginSetupScreen extends StatelessWidget {
   const PostLoginSetupScreen({Key? key}) : super(key: key);
