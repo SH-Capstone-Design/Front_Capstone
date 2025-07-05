@@ -60,7 +60,7 @@ class PostLoginSetupScreen extends StatelessWidget {
                 Navigator.pushReplacement(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const CoupleCodeScreen(),
+                    builder: (context) => const CoupleConnectScreen(),
                   ),
                 );
               },
