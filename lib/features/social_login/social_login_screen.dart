@@ -4,7 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../widgets/common/kakao_login_button.dart';
 import '../../widgets/common/google_login_button.dart';
-import '../../core/services/google_login_service.dart';
+import '../../services/google_login_service.dart';
+import '../../providers/jwt_token_provider.dart';
 
 class SocialLoginScreen extends ConsumerWidget {
   const SocialLoginScreen({super.key});
@@ -29,23 +30,18 @@ class SocialLoginScreen extends ConsumerWidget {
               const SizedBox(height: 20),
               GoogleLoginButton(
                 onPressed: () async {
-                  final user = await googleLoginService.signInWithGoogle();
-                  if (user != null) {
-                    print('구글 로그인 성공: ${user.email}');
+                  final jwtToken = await googleLoginService.signInAndGetJwtToken();
+                  if (jwtToken != null) {
+                    ref.read(jwtTokenProvider.notifier).state = jwtToken;
                     if (!context.mounted) return;
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(
-                        builder: (context) => const PostLoginSetupScreen(),
-                      ),
+                      MaterialPageRoute(builder: (context) => const PostLoginSetupScreen()),
                     );
                   } else {
-                    print('구글 로그인 실패 또는 취소');
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('구글 로그인 실패 또는 취소'),
-                      ),
+                      const SnackBar(content: Text('로그인 실패 또는 토큰 없음')),
                     );
                   }
                 },

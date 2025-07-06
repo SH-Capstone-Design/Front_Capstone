@@ -1,5 +1,5 @@
-// lib/app_router.dart
 import 'package:connectbeat/features/social_login/social_login_screen.dart';
+import 'package:connectbeat/screens/couplecode_input_screen.dart';
 import 'package:flutter/material.dart';
 import '../../features/login_register/login_screen.dart';
 import '../../features/login_register/register_screen.dart';
@@ -13,6 +13,8 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const RegisterScreen());
       case '/social_login':
         return MaterialPageRoute(builder: (_) => const SocialLoginScreen());
+      case '/couplecode_input':
+        return MaterialPageRoute(builder: (_) => CoupleCodeInputScreen());
       default:
         return MaterialPageRoute(
           builder: (_) => const UnknownRouteScreen(),

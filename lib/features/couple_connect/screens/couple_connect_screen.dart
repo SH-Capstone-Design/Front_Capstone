@@ -61,12 +61,12 @@ class CoupleConnectScreen extends ConsumerWidget {
                 },
               ),
 
-
               const SizedBox(height: 20),
+
               RoundedButton(
                 text: '커플 코드 입력',
                 onPressed: () {
-                  // TODO: 커플 코드 입력 기능 연결
+                  Navigator.of(context).pushNamed('/couplecode_input');
                 },
               ),
               if (coupleCodeState.isLoading)
