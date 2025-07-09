@@ -1,4 +1,3 @@
-import 'package:connectbeat/screens/couple_code_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
