@@ -5,12 +5,14 @@ import 'package:logging/logging.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'auth_service.dart';
 
 final Logger _logger = Logger('Kakao Login');
 
 final String baseUrl = dotenv.env['BASE_URL']!;
 final String loginUrl = '$baseUrl/users/login';
 
+/// 카카오 로그인 후 백엔드 로그인 및 토큰 저장
 Future<Map<String, dynamic>?> _getUserInfo() async {
   try {
     User user = await UserApi.instance.me();
@@ -39,6 +41,15 @@ Future<Map<String, dynamic>?> _getUserInfo() async {
     if (response.statusCode == 200) {
       final resBody = jsonDecode(response.body);
       _logger.info('백엔드 로그인 성공: $resBody');
+
+      final token = resBody['token'];
+      if (token != null) {
+        await AuthService.saveToken(token);
+        _logger.info('JWT 토큰 저장 완료');
+      } else {
+        _logger.warning('응답에 토큰이 없습니다.');
+      }
+
       return {
         'nickname': nickname,
         'profileImageUrl': profileImageUrl,
@@ -53,6 +64,7 @@ Future<Map<String, dynamic>?> _getUserInfo() async {
   }
 }
 
+/// 메인 카카오 로그인 함수
 Future<void> signInWithKakao(BuildContext context) async {
   if (await AuthApi.instance.hasToken()) {
     try {
@@ -80,6 +92,7 @@ Future<void> signInWithKakao(BuildContext context) async {
   }
 }
 
+/// 카카오톡으로 로그인 시도
 Future<void> loginWithKakaoAccount(BuildContext context) async {
   if (await isKakaoTalkInstalled()) {
     try {
@@ -103,6 +116,7 @@ Future<void> loginWithKakaoAccount(BuildContext context) async {
   }
 }
 
+/// 카카오계정으로 로그인 (fallback)
 Future<void> _loginWithKakaoAccountFallback(BuildContext context) async {
   try {
     OAuthToken token = await UserApi.instance.loginWithKakaoAccount();

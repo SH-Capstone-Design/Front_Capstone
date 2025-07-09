@@ -1,3 +1,4 @@
+// 2. lib/screens/couple/create_code_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -5,6 +6,7 @@ import 'package:connectbeat/core/constants.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:connectbeat/services/auth_service.dart';
 
 class CreateCodeScreen extends ConsumerStatefulWidget {
   const CreateCodeScreen({super.key});
@@ -20,7 +22,7 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchCoupleCode(); // 최초 실행 시 코드 가져오기
+    _fetchCoupleCode();
   }
 
   Future<void> _fetchCoupleCode() async {
@@ -28,12 +30,24 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
       _isLoading = true;
     });
 
+    final token = await AuthService.getToken();
+    if (token == null) {
+      setState(() {
+        _code = '토큰 없음';
+        _isLoading = false;
+      });
+      return;
+    }
+
     final response = await http.post(
       Uri.parse('${dotenv.env['BASE_URL']}/couples/code'),
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
     );
-    print('응답 바디: ${response.body}');
 
+    print('응답 바디: ${response.body}');
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);
@@ -72,8 +86,6 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               SizedBox(height: screenHeight * 0.03),
-
-              // 앱 로고
               SizedBox(
                 height: logoHeight,
                 child: Image.asset(
@@ -81,10 +93,7 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
                   fit: BoxFit.contain,
                 ),
               ),
-
               const Spacer(flex: 2),
-
-              // 코드 표시 박스
               Container(
                 width: double.infinity,
                 padding: EdgeInsets.symmetric(
@@ -112,11 +121,9 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
                       GestureDetector(
                         onTap: () {
                           if (_code != null) {
-                            Clipboard.setData(
-                                ClipboardData(text: _code!));
+                            Clipboard.setData(ClipboardData(text: _code!));
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text('코드가 복사되었습니다!')),
+                              const SnackBar(content: Text('코드가 복사되었습니다!')),
                             );
                           }
                         },
@@ -133,7 +140,6 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
                   ),
                 ),
               ),
-
               const Spacer(flex: 3),
             ],
           ),
