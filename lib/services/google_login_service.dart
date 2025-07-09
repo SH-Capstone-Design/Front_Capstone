@@ -3,7 +3,10 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class GoogleLoginService {
-  final GoogleSignIn _googleSignIn = GoogleSignIn.standard();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: ['email'],
+    serverClientId: '712293359808-okcmufiksaui0tork9pvsk00ravljo2t.apps.googleusercontent.com',
+  );
 
   /// 구글 로그인 → idToken → 서버에 전송 → JWT 반환
   Future<String?> signInAndGetJwtToken() async {
@@ -22,7 +25,7 @@ class GoogleLoginService {
 
       // 3. idToken을 백엔드로 전송 → JWT 발급 요청
       final response = await http.post(
-        Uri.parse('http://18.119.138.97:8080/api/auth/google-login'), // 실제 엔드포인트로!
+        Uri.parse('http://13.238.142.9:8080//api/auth/google-login'), // 실제 엔드포인트로!
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"idToken": idToken}),
       );
