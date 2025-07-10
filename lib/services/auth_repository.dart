@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AuthRepository {
-  static const String baseUrl = 'http://your-api-url.com';
+  final String baseUrl = dotenv.env['BASE_URL']!;
 
   Future<http.Response> sendKakaoUserToBackend({
     required String email,

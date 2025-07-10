@@ -15,9 +15,9 @@ class RoundedButton extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: onPressed, // ✅ null이면 자동 비활성화됨
+        onPressed: onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFFFF0F9), // 연한 핑크
+          backgroundColor: const Color(0xFFFFEEFF),
           foregroundColor: Colors.black,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(

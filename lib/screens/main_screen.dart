@@ -28,6 +28,7 @@ class MainScreen extends StatelessWidget {
               children: [
                 SizedBox(height: topPadding),
 
+                // 로고
                 SizedBox(
                   height: logoHeight,
                   child: Image.asset(
@@ -36,10 +37,38 @@ class MainScreen extends StatelessWidget {
                   ),
                 ),
 
-                const Spacer(flex: 1),
+                const Spacer(flex: 2),
 
+                // 감정 분석 멘트
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      '하루 10분, 대화를 통해',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+
+                    SizedBox(height: 4),
+                    Text(
+                      '오늘 하루 감정을 알아보다.',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 24),
+
+                // 시작하기 버튼
                 RoundedButton(
-                  text: '우리의 추억 쌓으러 가기',
+                  text: '시작하기',
                   onPressed: () => Navigator.pushNamed(context, '/login'),
                 ),
 

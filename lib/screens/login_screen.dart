@@ -16,42 +16,49 @@ class LoginScreen extends StatelessWidget {
     final topPadding = size.height * 0.01;
 
     return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          // 좌우 여백은 고정 24픽셀
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            // 가로 폭 꽉 채우기
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 위쪽 여백
-              SizedBox(height: topPadding),
+        body: Container(
+          decoration: BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage(AppConstants.backgroundPath),
+              fit: BoxFit.cover,
+            ),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(height: topPadding),
 
-              SizedBox(
-                height: logoHeight,
-                child: Image.asset(
-                  AppConstants.logoPath,
-                  fit: BoxFit.contain,
-                ),
+                  SizedBox(
+                    height: logoHeight,
+                    child: Image.asset(
+                      AppConstants.logoPath,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+
+
+
+                  // 로고와 버튼 사이 공간 (flex 비율로 동적 조절)
+                  const Spacer(flex: 1),
+
+                  // 카카오 로그인 버튼: 고정 높이 55
+                  LoginButton(
+                    imagePath: 'assets/images/kakao_login.png',
+                    height: 55,
+                    onPressed: () => signInWithKakao(context),
+                  ),
+
+                  // 버튼 아래 공간 더 넉넉히 주기 (flex 2)
+                  const Spacer(flex: 2),
+
+                ], // 나중에 Google 로그인 버튼 등 추가 가능
               ),
-
-              // 로고와 버튼 사이 공간 (flex 비율로 동적 조절)
-              const Spacer(flex: 1),
-
-              // 카카오 로그인 버튼: 고정 높이 55
-              LoginButton(
-                imagePath: 'assets/images/kakao_login.png',
-                height: 55,
-                onPressed: () => signInWithKakao(context),
-              ),
-
-              // 버튼 아래 공간 더 넉넉히 주기 (flex 2)
-              const Spacer(flex: 2),
-
-            ], // 나중에 Google 로그인 버튼 등 추가 가능
+            ),
           ),
         ),
-      ),
     );
   }
 }
