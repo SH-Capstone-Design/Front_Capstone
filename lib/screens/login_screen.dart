@@ -1,7 +1,10 @@
+import 'package:connectbeat/widgets/rounded_button.dart';
 import 'package:flutter/material.dart';
 import '../widgets/login_button.dart';
 import '../services/kakao_auth_service.dart';
+import '../services/google_auth_service.dart';
 import '../core/constants.dart';
+import '../providers/google_auth_provider.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -47,6 +50,12 @@ class LoginScreen extends StatelessWidget {
 
               // 버튼 아래 공간 더 넉넉히 주기 (flex 2)
               const Spacer(flex: 2),
+
+              LoginButton(
+                imagePath: 'assets/images/google_logo.png',
+                height: 100,
+                onPressed: () => GoogleAuthService.instance.signInWithGoogle(context),
+              )
 
             ], // 나중에 Google 로그인 버튼 등 추가 가능
           ),

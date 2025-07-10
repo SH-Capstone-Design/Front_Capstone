@@ -1,7 +1,11 @@
-allprojects {
+buildscript {
     repositories {
         google()
         mavenCentral()
+    }
+    dependencies {
+        // ✅ 구글 서비스(Google/Firebase) 플러그인 classpath 추가!
+        classpath("com.google.gms:google-services:4.3.15")
     }
 }
 

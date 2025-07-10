@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AuthRepository {
-  static const String baseUrl = 'http://your-api-url.com';
+  static const String baseUrl = 'http://13.238.142.9:8080';
 
   Future<http.Response> sendKakaoUserToBackend({
     required String email,
