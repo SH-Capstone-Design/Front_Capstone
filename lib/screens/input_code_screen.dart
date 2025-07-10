@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectbeat/core/constants.dart';
-import '../../../widgets/rounded_button.dart';
+import '../widgets/rounded_button.dart';
 import 'package:connectbeat/providers/input_code_provider.dart';
 
 class InputCodeScreen extends ConsumerWidget {
