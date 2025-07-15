@@ -36,9 +36,7 @@ class InputCodeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    const bgPink = Color(0xFFFFF6FA);
-    const boxPink = Color(0xFFFFF0F9);
-
+    final size = MediaQuery.of(context).size;
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
 
@@ -46,68 +44,78 @@ class InputCodeScreen extends ConsumerWidget {
     final errorMessage = ref.watch(codeErrorProvider);
 
     final textFieldHeight = screenHeight * 0.05;
+
     final logoHeight = screenHeight * 0.2;
 
+    final topPadding = size.height * 0.01;
+
     return Scaffold(
-      backgroundColor: bgPink,
-      body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.06),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              SizedBox(height: screenHeight * 0.03),
+      body: Container(
+        decoration: BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage(AppConstants.backgroundPath),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.06),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(height: topPadding),
 
-              // 앱 로고
-              SizedBox(
-                height: logoHeight,
-                child: Image.asset(
-                  AppConstants.logoPath,
-                  fit: BoxFit.contain,
-                ),
-              ),
-
-              const Spacer(flex: 2),
-
-              // 코드 입력 필드
-              Container(
-                height: textFieldHeight,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: boxPink,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: TextField(
-                  onChanged: (value) => ref.read(codeInputProvider.notifier).state = value,
-                  textAlign: TextAlign.center,
-                  decoration: const InputDecoration(
-                    hintText: '코드 입력칸',
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: 14),
+                // 앱 로고
+                SizedBox(
+                  height: logoHeight,
+                  child: Image.asset(
+                    AppConstants.logoPath,
+                    fit: BoxFit.contain,
                   ),
-                  style: TextStyle(fontSize: screenHeight * 0.022),
                 ),
-              ),
 
-              if (errorMessage != null) ...[
-                SizedBox(height: screenHeight * 0.01),
-                Text(
-                  errorMessage,
-                  style: const TextStyle(color: Colors.redAccent),
+                const Spacer(flex: 2),
+
+                // 코드 입력 필드
+                Container(
+                  height: textFieldHeight,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.8),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: TextField(
+                    onChanged: (value) => ref.read(codeInputProvider.notifier).state = value,
+                    textAlign: TextAlign.center,
+                    decoration: const InputDecoration(
+                      hintText: '코드 입력칸',
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    style: TextStyle(fontSize: screenHeight * 0.022),
+                  ),
                 ),
+
+                if (errorMessage != null) ...[
+                  SizedBox(height: screenHeight * 0.01),
+                  Text(
+                    errorMessage,
+                    style: const TextStyle(color: Colors.redAccent),
+                  ),
+                ],
+
+                SizedBox(height: screenHeight * 0.03),
+
+                // 확인 버튼
+                RoundedButton(
+                  text: '코드 확인',
+                  onPressed: isLoading ? null : () => _submitCode(ref, context),
+                ),
+
+                const Spacer(flex: 2),
               ],
-
-              SizedBox(height: screenHeight * 0.03),
-
-              // 확인 버튼
-              RoundedButton(
-                text: '코드 확인',
-                onPressed: isLoading ? null : () => _submitCode(ref, context),
-              ),
-
-              const Spacer(flex: 2),
-            ],
+            ),
           ),
         ),
       ),

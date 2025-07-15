@@ -63,6 +63,9 @@
 		<string>kakaostory</string>
 	</array>
 
+	<key>GIDClientID</key>
+    <string>868625444107-uokr73v7ifsuv8p5udlj8ftgupjc010q.apps.googleusercontent.com</string>
+
 	<!-- ✅ 카카오톡 로그인 시 사용할 URL Scheme (네이티브 앱 키 기준) -->
 	<key>CFBundleURLTypes</key>
 	<array>
@@ -76,7 +79,19 @@
 				<string>kakaoa9492078244d64856f66b3300353085a</string>
 			</array>
 		</dict>
+		<!-- ✅ 카카오톡 앱 연동에 필요한 설정 -->
+
+		<dict>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>CFBundleURLName</key>
+            <string>com.googleusercontent.apps.868625444107-uokr73v7ifsuv8p5udlj8ftgupjc010q</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                  <string>com.googleusercontent.apps.868625444107-uokr73v7ifsuv8p5udlj8ftgupjc010q</string> <!-- 이 부분을 교체 -->
+            </array>
+        </dict>
 	</array>
-	<!-- ✅ 카카오톡 앱 연동에 필요한 설정 끝 -->
+	<!-- 구글 연동에 필요한 설정  -->
 </dict>
 </plist>

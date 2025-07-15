@@ -15,6 +15,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   http: ^0.13.5
   kakao_flutter_sdk: ^1.9.7+3
+  google_sign_in: ^6.2.1
   logging: ^1.2.0
   image_picker: ^0.8.7+5
   flutter_secure_storage: ^9.0.0

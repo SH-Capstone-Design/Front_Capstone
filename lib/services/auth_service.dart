@@ -14,4 +14,19 @@ class AuthService {
   static Future<void> deleteToken() async {
     await _storage.delete(key: 'jwt_token');
   }
+
+  // 구글 idToken 저장
+  static Future<void> saveGoogleIdToken(String idToken) async {
+    await _storage.write(key: 'google_id_token', value: idToken);
+  }
+
+  // 구글 idToken 불러오기
+  static Future<String?> getGoogleIdToken() async {
+    return await _storage.read(key: 'google_id_token');
+  }
+
+  // 구글 idToken 삭제
+  static Future<void> deleteGoogleIdToken() async {
+    await _storage.delete(key: 'google_id_token');
+  }
 }
