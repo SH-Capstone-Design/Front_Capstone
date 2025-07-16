@@ -1,3 +1,5 @@
+import 'package:connectbeat/screens/couple_date_screen.dart';
+import 'package:connectbeat/screens/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:connectbeat/screens/login_screen.dart';
 import 'package:connectbeat/screens/create_code_screen.dart';
@@ -16,6 +18,10 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const CreateCodeScreen());
       case '/input-code':
         return MaterialPageRoute(builder: (_) => const InputCodeScreen());
+      case '/home-screen':
+        return MaterialPageRoute(builder: (_) => const HomeScreen());
+      case '/coupledate':
+        return MaterialPageRoute(builder: (_) => const CoupleDateInputScreen());
       case '/profile_setup':
         final args = settings.arguments as Map<String, dynamic>;
         return MaterialPageRoute(

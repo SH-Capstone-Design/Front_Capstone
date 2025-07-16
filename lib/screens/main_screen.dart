@@ -44,7 +44,7 @@ class MainScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: const [
                     Text(
-                      '하루 10분, 대화를 통해',
+                      '하루 10분, 연인과 대화를 통해',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,

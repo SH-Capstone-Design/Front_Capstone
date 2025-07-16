@@ -16,12 +16,13 @@ Future<void> signInWithGoogle(BuildContext context) async {
     final nickname = account.displayName ?? '';
     final providerId = account.id;
 
-    // 구글 인증 정보 (idToken) 가져오기
+    // 구글 인증 정보 (idToken, accessToken) 가져오기
     final authentication = await account.authentication;
     final idToken = authentication.idToken;
+    final accessToken = authentication.accessToken;
 
-    if (idToken == null) {
-      debugPrint('idToken이 없습니다. 로그인 실패');
+    if (idToken == null || accessToken == null) {
+      debugPrint('idToken 또는 accessToken이 없습니다. 로그인 실패');
       return;
     }
 
@@ -31,7 +32,8 @@ Future<void> signInWithGoogle(BuildContext context) async {
       provider: 'google',
       providerId: providerId,
       profileImageUrl: account.photoUrl,
-      idToken: idToken, // idToken 필수 전달
+      idToken: idToken,
+      accessToken: accessToken,
     );
 
     if (response.statusCode == 200) {

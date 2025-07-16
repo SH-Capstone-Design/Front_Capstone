@@ -12,6 +12,7 @@ class AuthRepository {
     required String providerId,
     String? profileImageUrl,
     required String idToken,  // idToken 필수로 변경
+    required String accessToken,
   }) async {
     final url = Uri.parse('$baseUrl/user/login');
     return await http.post(

@@ -1,4 +1,3 @@
-// 2. lib/screens/couple/create_code_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -31,6 +30,8 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
     });
 
     final token = await AuthService.getToken();
+    print('가져온 토큰: $token'); // 토큰 값 디버깅 출력
+
     if (token == null) {
       setState(() {
         _code = '토큰 없음';
@@ -47,6 +48,7 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
       },
     );
 
+    print('응답 상태 코드: ${response.statusCode}');
     print('응답 바디: ${response.body}');
 
     if (response.statusCode == 200) {

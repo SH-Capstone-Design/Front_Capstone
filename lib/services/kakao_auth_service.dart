@@ -13,7 +13,10 @@ final String baseUrl = dotenv.env['BASE_URL']!;
 final String loginUrl = '$baseUrl/users/login';
 
 /// 카카오 로그인 후 백엔드 로그인 및 토큰 저장
-Future<Map<String, dynamic>?> _getUserInfo() async {
+Future<Map<String, dynamic>?> _getUserInfo({
+  required String accessToken,
+  String? idToken,
+}) async {
   try {
     User user = await UserApi.instance.me();
 
@@ -28,6 +31,8 @@ Future<Map<String, dynamic>?> _getUserInfo() async {
       'nickname': nickname,
       'provider': provider,
       'providerId': providerId,
+      'idToken': idToken,         // 카카오에서는 null
+      'accessToken': accessToken, // 필수
     };
 
     _logger.info('사용자 정보 추출 성공: $payload');
@@ -70,7 +75,17 @@ Future<void> signInWithKakao(BuildContext context) async {
     try {
       AccessTokenInfo tokenInfo = await UserApi.instance.accessTokenInfo();
       _logger.info('토큰 유효성 체크 성공: ${tokenInfo.id} ${tokenInfo.expiresIn}');
-      final userInfo = await _getUserInfo();
+
+      final OAuthToken? token = await TokenManagerProvider.instance.manager.getToken();
+      if (token == null) {
+        throw Exception('토큰 없음');
+      }
+
+      final userInfo = await _getUserInfo(
+        idToken: null,
+        accessToken: token.accessToken,
+      );
+
       if (userInfo != null) {
         Navigator.pushReplacementNamed(
           context,
@@ -98,7 +113,12 @@ Future<void> loginWithKakaoAccount(BuildContext context) async {
     try {
       OAuthToken token = await UserApi.instance.loginWithKakaoTalk();
       _logger.info('카카오톡으로 로그인 성공: ${token.accessToken}');
-      final userInfo = await _getUserInfo();
+
+      final userInfo = await _getUserInfo(
+        idToken: null,
+        accessToken: token.accessToken,
+      );
+
       if (userInfo != null) {
         Navigator.pushReplacementNamed(
           context,
@@ -121,7 +141,12 @@ Future<void> _loginWithKakaoAccountFallback(BuildContext context) async {
   try {
     OAuthToken token = await UserApi.instance.loginWithKakaoAccount();
     _logger.info('카카오계정으로 로그인 성공: ${token.accessToken}');
-    final userInfo = await _getUserInfo();
+
+    final userInfo = await _getUserInfo(
+      idToken: null,
+      accessToken: token.accessToken,
+    );
+
     if (userInfo != null) {
       Navigator.pushReplacementNamed(
         context,
