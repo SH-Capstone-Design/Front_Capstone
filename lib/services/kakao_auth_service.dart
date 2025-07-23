@@ -31,8 +31,8 @@ Future<Map<String, dynamic>?> _getUserInfo({
       'nickname': nickname,
       'provider': provider,
       'providerId': providerId,
-      'idToken': idToken,         // 카카오에서는 null
-      'accessToken': accessToken, // 필수
+      'idToken': idToken,
+      'accessToken': accessToken,
     };
 
     _logger.info('사용자 정보 추출 성공: $payload');

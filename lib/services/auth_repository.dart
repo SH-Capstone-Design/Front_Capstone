@@ -24,7 +24,7 @@ class AuthRepository {
         'provider': provider,
         'providerId': providerId,
         if (profileImageUrl != null) 'profileImageUrl': profileImageUrl,
-        'idToken': idToken, // 구글 idToken 포함
+        'idToken': idToken,
       }),
     );
   }

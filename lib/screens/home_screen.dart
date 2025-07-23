@@ -1,21 +1,63 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectbeat/core/constants.dart';
-import 'package:connectbeat/providers/couple_date_provider.dart'; // Provider import
+import 'package:connectbeat/providers/couple_date_provider.dart';
+import 'package:connectbeat/widgets/bottom_bar.dart';
+import 'package:connectbeat/main.dart';  // routeObserver import
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final dDayAsyncValue = ref.watch(coupleDDayProvider);
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
 
+class _HomeScreenState extends ConsumerState<HomeScreen> with RouteAware {
+  int _currentIndex = 2;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    routeObserver.subscribe(this, ModalRoute.of(context)!);
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  // 뒤 화면에서 돌아올 때 호출, 이때 데이터 갱신
+  @override
+  void didPopNext() {
+    ref.invalidate(coupleDDayProvider);
+  }
+
+  void _onTabTapped(int index) {
+    setState(() {
+      _currentIndex = index;
+    });
+
+    switch (index) {
+      case 0:
+        Navigator.pushNamed(context, '/history');
+        break;
+      case 1:
+        Navigator.pushNamed(context, '/character');
+        break;
+      case 2:
+      // 현재 홈 화면이므로 아무 동작 없음
+        break;
+      case 3:
+        Navigator.pushNamed(context, '/setting');
+        break;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dDayAsyncValue = ref.watch(coupleDDayProvider);
     final size = MediaQuery.of(context).size;
-    final logoHeight = size.height * 0.15;
-    final topPadding = size.height * 0.02;
-    final spacingSmall = size.height * 0.015;
-    final spacingMedium = size.height * 0.03;
-    final spacingLarge = size.height * 0.05;
 
     return Scaffold(
       body: Container(
@@ -33,20 +75,12 @@ class HomeScreen extends ConsumerWidget {
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  SizedBox(height: topPadding),
-
-                  // 로고
+                  SizedBox(height: size.height * 0.02),
                   SizedBox(
-                    height: logoHeight,
-                    child: Image.asset(
-                      AppConstants.logoPath,
-                      fit: BoxFit.contain,
-                    ),
+                    height: size.height * 0.15,
+                    child: Image.asset(AppConstants.logoPath),
                   ),
-
-                  SizedBox(height: spacingLarge),
-
-                  // 오늘 우리의 10분
+                  SizedBox(height: size.height * 0.05),
                   GestureDetector(
                     onTap: () {
                       Navigator.pushNamed(context, '/10min_chat');
@@ -66,44 +100,29 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-
-                  SizedBox(height: spacingSmall),
-
-                  // 커플 디데이
+                  SizedBox(height: size.height * 0.015),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: GestureDetector(
-                      onTap: () async {
-                        await Navigator.pushNamed(context, '/coupledate');
-                        ref.invalidate(coupleDDayProvider);
-                      },
-                      child: Container(
-                        width: size.width * 0.5,
-                        padding: EdgeInsets.symmetric(
-                          vertical: size.height * 0.015,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFE6F4),
-                          borderRadius: BorderRadius.circular(size.width * 0.1),
-                        ),
-                        child: Center(
-                          child: dDayAsyncValue.when(
-                            data: (dDayText) => Text(
-                              dDayText,
-                              style: const TextStyle(fontSize: 16),
-                              textAlign: TextAlign.center,
-                            ),
-                            loading: () => const CircularProgressIndicator(),
-                            error: (_, __) => const Text('에러 발생'),
+                    child: Container(
+                      width: size.width * 0.5,
+                      padding: EdgeInsets.symmetric(vertical: size.height * 0.015),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFE6F4),
+                        borderRadius: BorderRadius.circular(size.width * 0.1),
+                      ),
+                      child: Center(
+                        child: dDayAsyncValue.when(
+                          data: (dDayText) => Text(
+                            dDayText,
+                            style: const TextStyle(fontSize: 16),
                           ),
+                          loading: () => const CircularProgressIndicator(),
+                          error: (_, __) => const Text('에러 발생'),
                         ),
                       ),
                     ),
                   ),
-
-                  SizedBox(height: spacingMedium),
-
-                  // 캐릭터 성장 프레임
+                  SizedBox(height: size.height * 0.03),
                   GestureDetector(
                     onTap: () {
                       Navigator.pushNamed(context, '/backgroundCharacter');
@@ -112,10 +131,7 @@ class HomeScreen extends ConsumerWidget {
                       width: double.infinity,
                       height: size.height * 0.25,
                       decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Colors.grey,
-                          width: 2,
-                        ),
+                        border: Border.all(color: Colors.grey, width: 2),
                         borderRadius: BorderRadius.circular(size.width * 0.03),
                       ),
                       child: const Center(
@@ -126,13 +142,16 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-
-                  SizedBox(height: spacingLarge),
+                  SizedBox(height: size.height * 0.05),
                 ],
               ),
             ),
           ),
         ),
+      ),
+      bottomNavigationBar: BottomBar(
+        currentIndex: _currentIndex,
+        onTap: _onTabTapped,
       ),
     );
   }
