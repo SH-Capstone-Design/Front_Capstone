@@ -55,8 +55,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       return;
     }
 
-    // TODO: 필요한 경우 닉네임과 이미지 파일을 서버에 저장하거나 전달
-
     Navigator.pushNamed(context, '/couple-code');
   }
 

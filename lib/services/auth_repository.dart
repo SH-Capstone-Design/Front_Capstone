@@ -5,48 +5,42 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class AuthRepository {
   final String baseUrl = dotenv.env['BASE_URL']!;
 
+  /// 구글 로그인용: provider = "google", idToken 필수, accessToken 옵션
   Future<http.Response> sendGoogleUserToBackend({
-    required String email,
-    required String nickname,
-    required String provider,
-    required String providerId,
-    String? profileImageUrl,
-    required String idToken,  // idToken 필수로 변경
+    required String idToken,
+    String? accessToken,
   }) async {
-    final url = Uri.parse('$baseUrl/user/login');
+    final url = Uri.parse('$baseUrl/users/login');
+    final bodyMap = {
+      'provider': 'google',
+      'idToken': idToken,
+    };
+
+    if (accessToken != null && accessToken.isNotEmpty) {
+      bodyMap['accessToken'] = accessToken;
+    }
+
     return await http.post(
       url,
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'email': email,
-        'nickname': nickname,
-        'provider': provider,
-        'providerId': providerId,
-        if (profileImageUrl != null) 'profileImageUrl': profileImageUrl,
-        'idToken': idToken, // 구글 idToken 포함
-      }),
+      body: jsonEncode(bodyMap),
     );
   }
 
+  /// 카카오 로그인용: provider = "kakao", accessToken 필수
   Future<http.Response> sendKakaoUserToBackend({
-    required String email,
-    required String nickname,
-    required String provider,
-    required String providerId,
+    required String accessToken,
   }) async {
-    final url = Uri.parse('$baseUrl/user/login');
+    final url = Uri.parse('$baseUrl/users/login');
+    final bodyMap = {
+      'provider': 'kakao',
+      'accessToken': accessToken,
+    };
 
-    final response = await http.post(
+    return await http.post(
       url,
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'email': email,
-        'nickname': nickname,
-        'provider': provider,
-        'providerId': providerId,
-      }),
+      body: jsonEncode(bodyMap),
     );
-
-    return response;
   }
 }

@@ -1,9 +1,12 @@
+import 'package:connectbeat/screens/couple_date_screen.dart';
+import 'package:connectbeat/screens/home_screen.dart';
+import 'package:connectbeat/screens/setting_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:connectbeat/screens/login_screen.dart';
 import 'package:connectbeat/screens/create_code_screen.dart';
 import 'package:connectbeat/screens/couple_code_screen.dart';
 import 'package:connectbeat/screens/input_code_screen.dart';
-import 'package:connectbeat/screens/profile_setup_screen.dart'; // 추가
+import 'package:connectbeat/screens/profile_setup_screen.dart';
 
 class AppRouter {
   static Route<dynamic> generateRoute(RouteSettings settings) {
@@ -16,6 +19,12 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const CreateCodeScreen());
       case '/input-code':
         return MaterialPageRoute(builder: (_) => const InputCodeScreen());
+      case '/home-screen':
+        return MaterialPageRoute(builder: (_) => const HomeScreen());
+      case '/coupledate':
+        return MaterialPageRoute(builder: (_) => const CoupleDateInputScreen());
+      case '/setting' :
+        return MaterialPageRoute(builder: (_) => const SettingScreen());
       case '/profile_setup':
         final args = settings.arguments as Map<String, dynamic>;
         return MaterialPageRoute(

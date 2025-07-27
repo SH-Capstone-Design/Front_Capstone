@@ -28,7 +28,7 @@ class InputCodeScreen extends ConsumerWidget {
     ref.read(codeLoadingProvider.notifier).state = false;
 
     if (isValid) {
-      Navigator.pushNamed(context, '/next-screen');
+      Navigator.pushNamed(context, '/home-screen');
     } else {
       ref.read(codeErrorProvider.notifier).state = '유효하지 않은 코드입니다.';
     }

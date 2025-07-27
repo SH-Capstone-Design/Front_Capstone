@@ -13,21 +13,19 @@ final String baseUrl = dotenv.env['BASE_URL']!;
 final String loginUrl = '$baseUrl/users/login';
 
 /// 카카오 로그인 후 백엔드 로그인 및 토큰 저장
-Future<Map<String, dynamic>?> _getUserInfo() async {
+Future<Map<String, dynamic>?> _getUserInfo({
+  required String accessToken,
+  String? idToken,
+}) async {
   try {
     User user = await UserApi.instance.me();
 
-    final email = user.kakaoAccount?.email ?? '';
     final nickname = user.kakaoAccount?.profile?.nickname ?? '';
     final profileImageUrl = user.kakaoAccount?.profile?.profileImageUrl;
-    final providerId = user.id.toString();
-    final provider = 'kakao';
 
     final Map<String, dynamic> payload = {
-      'email': email,
-      'nickname': nickname,
-      'provider': provider,
-      'providerId': providerId,
+      'provider': 'kakao',
+      'accessToken': accessToken,
     };
 
     _logger.info('사용자 정보 추출 성공: $payload');
@@ -40,19 +38,25 @@ Future<Map<String, dynamic>?> _getUserInfo() async {
 
     if (response.statusCode == 200) {
       final resBody = jsonDecode(response.body);
+
       _logger.info('백엔드 로그인 성공: $resBody');
 
       final token = resBody['token'];
+      final userId = resBody['userId'];
+      final nicknameFromBackend = resBody['nickname'];
+      final profileImageFromBackend = resBody['profileImage'];
+
       if (token != null) {
         await AuthService.saveToken(token);
-        _logger.info('JWT 토큰 저장 완료');
+        _logger.info('JWT 토큰 저장 완료: $token');
       } else {
         _logger.warning('응답에 토큰이 없습니다.');
       }
 
       return {
-        'nickname': nickname,
-        'profileImageUrl': profileImageUrl,
+        'nickname': nicknameFromBackend ?? nickname,
+        'profileImageUrl': profileImageFromBackend ?? profileImageUrl,
+        'userId': userId,
       };
     } else {
       _logger.warning('백엔드 로그인 실패: ${response.statusCode} - ${response.body}');
@@ -70,7 +74,17 @@ Future<void> signInWithKakao(BuildContext context) async {
     try {
       AccessTokenInfo tokenInfo = await UserApi.instance.accessTokenInfo();
       _logger.info('토큰 유효성 체크 성공: ${tokenInfo.id} ${tokenInfo.expiresIn}');
-      final userInfo = await _getUserInfo();
+
+      final OAuthToken? token = await TokenManagerProvider.instance.manager.getToken();
+      if (token == null) {
+        throw Exception('토큰 없음');
+      }
+
+      final userInfo = await _getUserInfo(
+        idToken: null,
+        accessToken: token.accessToken,
+      );
+
       if (userInfo != null) {
         Navigator.pushReplacementNamed(
           context,
@@ -98,7 +112,12 @@ Future<void> loginWithKakaoAccount(BuildContext context) async {
     try {
       OAuthToken token = await UserApi.instance.loginWithKakaoTalk();
       _logger.info('카카오톡으로 로그인 성공: ${token.accessToken}');
-      final userInfo = await _getUserInfo();
+
+      final userInfo = await _getUserInfo(
+        idToken: null,
+        accessToken: token.accessToken,
+      );
+
       if (userInfo != null) {
         Navigator.pushReplacementNamed(
           context,
@@ -121,7 +140,12 @@ Future<void> _loginWithKakaoAccountFallback(BuildContext context) async {
   try {
     OAuthToken token = await UserApi.instance.loginWithKakaoAccount();
     _logger.info('카카오계정으로 로그인 성공: ${token.accessToken}');
-    final userInfo = await _getUserInfo();
+
+    final userInfo = await _getUserInfo(
+      idToken: null,
+      accessToken: token.accessToken,
+    );
+
     if (userInfo != null) {
       Navigator.pushReplacementNamed(
         context,
