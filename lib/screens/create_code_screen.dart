@@ -30,7 +30,7 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
     });
 
     final token = await AuthService.getToken();
-    print('가져온 토큰: $token'); // 토큰 값 디버깅 출력
+    print('가져온 토큰: $token');
 
     if (token == null) {
       setState(() {
@@ -40,30 +40,50 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
       return;
     }
 
-    final response = await http.post(
-      Uri.parse('${dotenv.env['BASE_URL']}/couples/code'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      },
-    );
+    try {
+      final response = await http.post(
+        Uri.parse('${dotenv.env['BASE_URL']}/couples/code'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({}),
+      );
 
-    print('응답 상태 코드: ${response.statusCode}');
-    print('응답 바디: ${response.body}');
+      print('응답 상태 코드: ${response.statusCode}');
 
-    if (response.statusCode == 200) {
-      final json = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        final code = json['code'];
+        final message = json['message'];
+
+        setState(() {
+          _code = code;
+          _isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message ?? '코드가 생성되었습니다')),
+        );
+      } else {
+        setState(() {
+          _code = '생성 실패';
+          _isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('코드 생성 실패: ${response.body}')),
+        );
+      }
+    } catch (e) {
+      print('에러 발생: $e');
       setState(() {
-        _code = json['code'];
+        _code = '에러 발생';
         _isLoading = false;
       });
-    } else {
-      setState(() {
-        _code = '생성 실패';
-        _isLoading = false;
-      });
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('코드 생성 실패')),
+        SnackBar(content: Text('에러: $e')),
       );
     }
   }

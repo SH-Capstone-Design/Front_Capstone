@@ -17,8 +17,8 @@ class BottomBar extends StatelessWidget {
       onTap: onTap,
       selectedItemColor: Colors.pink,
       unselectedItemColor: Colors.grey,
-      backgroundColor: Colors.transparent,
-      elevation: 0, // 그림자 제거
+      backgroundColor: Colors.white, // 투명 대신 흰색 배경으로 수정
+      elevation: 8, // 기본 그림자 적용
       type: BottomNavigationBarType.fixed,
       items: const [
         BottomNavigationBarItem(

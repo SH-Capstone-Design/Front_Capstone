@@ -9,12 +9,14 @@ final RouteObserver<ModalRoute<void>> routeObserver = RouteObserver<ModalRoute<v
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await dotenv.load(fileName: ".env");
 
-  KakaoSdk.init(
-    nativeAppKey: dotenv.env['KAKAO_NATIVE_APP_KEY']!,
-  );
+  final kakaoKey = dotenv.env['KAKAO_NATIVE_APP_KEY'];
+  if (kakaoKey == null) {
+    throw Exception('KAKAO_NATIVE_APP_KEY is not defined in .env file');
+  }
+
+  KakaoSdk.init(nativeAppKey: kakaoKey);
 
   runApp(const ProviderScope(child: ConnectBeatApp()));
 }

@@ -20,18 +20,11 @@ Future<Map<String, dynamic>?> _getUserInfo({
   try {
     User user = await UserApi.instance.me();
 
-    final email = user.kakaoAccount?.email ?? '';
     final nickname = user.kakaoAccount?.profile?.nickname ?? '';
     final profileImageUrl = user.kakaoAccount?.profile?.profileImageUrl;
-    final providerId = user.id.toString();
-    final provider = 'kakao';
 
     final Map<String, dynamic> payload = {
-      'email': email,
-      'nickname': nickname,
-      'provider': provider,
-      'providerId': providerId,
-      'idToken': idToken,
+      'provider': 'kakao',
       'accessToken': accessToken,
     };
 
@@ -45,19 +38,25 @@ Future<Map<String, dynamic>?> _getUserInfo({
 
     if (response.statusCode == 200) {
       final resBody = jsonDecode(response.body);
+
       _logger.info('백엔드 로그인 성공: $resBody');
 
       final token = resBody['token'];
+      final userId = resBody['userId'];
+      final nicknameFromBackend = resBody['nickname'];
+      final profileImageFromBackend = resBody['profileImage'];
+
       if (token != null) {
         await AuthService.saveToken(token);
-        _logger.info('JWT 토큰 저장 완료');
+        _logger.info('JWT 토큰 저장 완료: $token');
       } else {
         _logger.warning('응답에 토큰이 없습니다.');
       }
 
       return {
-        'nickname': nickname,
-        'profileImageUrl': profileImageUrl,
+        'nickname': nicknameFromBackend ?? nickname,
+        'profileImageUrl': profileImageFromBackend ?? profileImageUrl,
+        'userId': userId,
       };
     } else {
       _logger.warning('백엔드 로그인 실패: ${response.statusCode} - ${response.body}');
