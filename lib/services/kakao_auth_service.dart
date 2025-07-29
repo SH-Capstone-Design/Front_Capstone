@@ -37,7 +37,8 @@ Future<Map<String, dynamic>?> _getUserInfo({
     );
 
     if (response.statusCode == 200) {
-      final resBody = jsonDecode(response.body);
+      final resBody = jsonDecode(utf8.decode(response.bodyBytes));
+
 
       _logger.info('백엔드 로그인 성공: $resBody');
 

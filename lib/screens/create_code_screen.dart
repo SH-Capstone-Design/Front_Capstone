@@ -53,7 +53,8 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
       print('응답 상태 코드: ${response.statusCode}');
 
       if (response.statusCode == 200) {
-        final json = jsonDecode(response.body);
+        final decodedBody = utf8.decode(response.bodyBytes);
+        final json = jsonDecode(decodedBody);
         final code = json['code'];
         final message = json['message'];
 
