@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/providers/couple_date_provider.dart';
 import 'package:connectbeat/widgets/bottom_bar.dart';
-import 'package:connectbeat/main.dart';  // routeObserver import
+import 'package:connectbeat/main.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -18,18 +18,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with RouteAware {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // RouteObserver 등록
     routeObserver.subscribe(this, ModalRoute.of(context)!);
   }
 
   @override
   void dispose() {
+    // RouteObserver 해제
     routeObserver.unsubscribe(this);
     super.dispose();
   }
 
-  // 뒤 화면에서 돌아올 때 호출, 이때 데이터 갱신
   @override
   void didPopNext() {
+    // CoupleDateScreen에서 돌아왔을 때 provider 갱신
     ref.invalidate(coupleDDayProvider);
   }
 
@@ -46,7 +48,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with RouteAware {
         Navigator.pushNamed(context, '/character');
         break;
       case 2:
-      // 현재 홈 화면이므로 아무 동작 없음
+      // 현재 홈
         break;
       case 3:
         Navigator.pushNamed(context, '/setting');

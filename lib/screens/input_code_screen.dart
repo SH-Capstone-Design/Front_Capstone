@@ -7,12 +7,12 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:connectbeat/services/auth_service.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // ✅ 추가
 
 final String baseUrl = dotenv.env['BASE_URL']!;
 
 class InputCodeScreen extends ConsumerWidget {
   const InputCodeScreen({super.key});
-
 
   Future<String?> _connectCouple(String code) async {
     final token = await AuthService.getToken();
@@ -29,11 +29,6 @@ class InputCodeScreen extends ConsumerWidget {
         },
         body: jsonEncode({'code': code}),
       );
-      print('🔐 전송 토큰: $token');
-      print('📡 요청 URL: $linkUrl');
-      print('📤 요청 바디: ${jsonEncode({'code': code})}');
-      print('📥 응답 상태 코드: ${response.statusCode}');
-
 
       if (response.statusCode == 200) {
         return null;
@@ -59,6 +54,25 @@ class InputCodeScreen extends ConsumerWidget {
     ref.read(codeLoadingProvider.notifier).state = true;
     ref.read(codeErrorProvider.notifier).state = null;
 
+    if (code == 'connectbeat') {
+      // ✅ 마스터 코드 처리
+      await Future.delayed(const Duration(milliseconds: 500));
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('isCoupleConnected', true);
+        await prefs.setString('coupleCode', 'connectbeat');
+      } catch (e) {
+        ref.read(codeErrorProvider.notifier).state = '저장 중 오류 발생: $e';
+        ref.read(codeLoadingProvider.notifier).state = false;
+        return;
+      }
+
+      ref.read(codeLoadingProvider.notifier).state = false;
+      Navigator.pushNamed(context, '/home-screen');
+      return;
+    }
+
+    // 일반 커플 코드 처리
     final errorMsg = await _connectCouple(code);
     ref.read(codeLoadingProvider.notifier).state = false;
 
@@ -108,7 +122,6 @@ class InputCodeScreen extends ConsumerWidget {
 
                 const Spacer(flex: 2),
 
-                // 코드 입력 필드
                 Container(
                   height: textFieldHeight,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -117,7 +130,8 @@ class InputCodeScreen extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: TextField(
-                    onChanged: (value) => ref.read(codeInputProvider.notifier).state = value,
+                    onChanged: (value) =>
+                    ref.read(codeInputProvider.notifier).state = value,
                     textAlign: TextAlign.center,
                     decoration: const InputDecoration(
                       hintText: '코드 입력칸',
@@ -140,10 +154,10 @@ class InputCodeScreen extends ConsumerWidget {
 
                 SizedBox(height: screenHeight * 0.03),
 
-                // 확인 버튼
                 RoundedButton(
                   text: '코드 확인',
-                  onPressed: isLoading ? null : () => _submitCode(ref, context),
+                  onPressed:
+                  isLoading ? null : () => _submitCode(ref, context),
                 ),
 
                 const Spacer(flex: 2),
