@@ -89,7 +89,14 @@ class _SettingScreenState extends State<SettingScreen> {
                     Navigator.pushNamed(context, '/coupledate');
                   },
                 ),
+                const Spacer(),
 
+                RoundedButton(
+                  text: "커플 관리",
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/couplemanage');
+                  },
+                ),
                 const Spacer(),
               ],
             ),
