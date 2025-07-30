@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectbeat/core/constants.dart';
-import '../../../widgets/rounded_button.dart';
+// import '../../../widgets/rounded_button.dart';
+import 'package:connectbeat/widgets/rounded_button.dart';  // ✅ 경로 수정
 import 'package:connectbeat/providers/input_code_provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
