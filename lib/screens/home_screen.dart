@@ -85,7 +85,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with RouteAware {
                   SizedBox(height: size.height * 0.05),
                   GestureDetector(
                     onTap: () {
-                      Navigator.pushNamed(context, '/10min_chat');
+                      Navigator.pushNamed(context, '/create-chat');
                     },
                     child: Container(
                       width: double.infinity,
