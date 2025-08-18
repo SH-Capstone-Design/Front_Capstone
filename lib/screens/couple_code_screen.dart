@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:connectbeat/core/constants.dart';
-import '../../widgets/rounded_button.dart';
+import '../widgets/rounded_button.dart';
 
 class CoupleCodeScreen extends StatelessWidget {
   const CoupleCodeScreen({super.key});
