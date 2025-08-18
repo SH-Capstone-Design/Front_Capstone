@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:connectbeat/core/constants.dart';
 import '../widgets/rounded_button.dart';
-import '../widgets/bottom_bar.dart'; // BottomBar 경로 확인 필요
+import '../widgets/bottom_bar.dart';
 
 class SettingScreen extends StatefulWidget {
   const SettingScreen({super.key});
