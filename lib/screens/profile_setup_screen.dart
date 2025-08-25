@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:connectbeat/core/constants.dart';
@@ -26,7 +25,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   @override
   void initState() {
     super.initState();
-    _nicknameController = TextEditingController(text: widget.nickname);
+    _nicknameController = TextEditingController(
+      text: widget.nickname.isNotEmpty ? widget.nickname : '',
+    );
   }
 
   @override
@@ -55,6 +56,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       return;
     }
 
+    // TODO: 여기에 서버 업로드 로직 추가 가능
     Navigator.pushNamed(context, '/couple-code');
   }
 
@@ -93,10 +95,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     backgroundColor: Colors.white,
                     backgroundImage: _pickedImage != null
                         ? FileImage(_pickedImage!)
-                        : (widget.profileImageUrl != null
-                        ? NetworkImage(widget.profileImageUrl!) as ImageProvider
+                        : (widget.profileImageUrl != null &&
+                        widget.profileImageUrl!.isNotEmpty
+                        ? NetworkImage(widget.profileImageUrl!)
+                    as ImageProvider
                         : null),
-                    child: (_pickedImage == null && widget.profileImageUrl == null)
+                    child: (_pickedImage == null &&
+                        (widget.profileImageUrl == null ||
+                            widget.profileImageUrl!.isEmpty))
                         ? const Icon(Icons.person, size: 60, color: Colors.grey)
                         : null,
                   ),

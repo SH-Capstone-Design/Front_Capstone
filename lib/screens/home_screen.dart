@@ -19,6 +19,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with RouteAware {
   void didChangeDependencies() {
     super.didChangeDependencies();
     // RouteObserver 등록
+    ref.invalidate(coupleDDayProvider);
     routeObserver.subscribe(this, ModalRoute.of(context)!);
   }
 
@@ -49,6 +50,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with RouteAware {
         break;
       case 2:
       // 현재 홈
+        ref.invalidate(coupleDDayProvider);
         break;
       case 3:
         Navigator.pushNamed(context, '/setting');

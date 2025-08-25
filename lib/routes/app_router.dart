@@ -10,6 +10,8 @@ import 'package:connectbeat/screens/couple_code_screen.dart';
 import 'package:connectbeat/screens/input_code_screen.dart';
 import 'package:connectbeat/screens/profile_setup_screen.dart';
 
+import '../screens/couple_manage_screen.dart';
+
 class AppRouter {
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -31,6 +33,8 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const CreateChatScreen());
       case '/invite-partner':
         return MaterialPageRoute(builder: (_) => const InvitePartnerScreen());
+      case '/couple-manage':
+        return MaterialPageRoute(builder: (_) => const CoupleManageScreen(initialCoupleCode: '',));
       case '/profile_setup':
         final args = settings.arguments as Map<String, dynamic>;
         return MaterialPageRoute(

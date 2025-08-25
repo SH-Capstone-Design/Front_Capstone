@@ -1,3 +1,4 @@
+// main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,8 +16,8 @@ Future<void> main() async {
   if (kakaoKey == null) {
     throw Exception('KAKAO_NATIVE_APP_KEY is not defined in .env file');
   }
-
   KakaoSdk.init(nativeAppKey: kakaoKey);
+  print('Kakao SDK 초기화 완료');
 
   runApp(const ProviderScope(child: ConnectBeatApp()));
 }
@@ -32,10 +33,6 @@ class ConnectBeatApp extends StatelessWidget {
       theme: ThemeData(
         scaffoldBackgroundColor: const Color(0xFFFFF8FC),
         fontFamily: 'Pretendard',
-        textTheme: const TextTheme(
-          bodyMedium: TextStyle(color: Colors.black),
-        ),
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.pinkAccent),
       ),
       home: const MainScreen(),
       onGenerateRoute: AppRouter.generateRoute,

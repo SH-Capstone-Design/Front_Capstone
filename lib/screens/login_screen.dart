@@ -45,7 +45,9 @@ class LoginScreen extends StatelessWidget {
                   LoginButton(
                     imagePath: 'assets/images/kakao_login.png',
                     height: 55,
-                    onPressed: () => signInWithKakao(context),
+                    onPressed: () =>
+                        signInWithKakao(context),
+
                   ),
                   const SizedBox(height: 16),
                   LoginButton(

@@ -6,12 +6,16 @@ final coupleDDayProvider = FutureProvider<String>((ref) async {
   final dateStr = prefs.getString('coupleDate');
 
   if (dateStr == null) {
-    return '우리가 만난지'; // 기본값
+    return '사귄 날짜를 설정해주세요 💕';
   }
 
-  final coupleDate = DateTime.parse(dateStr);
-  final now = DateTime.now();
+  try {
+    final coupleDate = DateTime.parse(dateStr);
+    final now = DateTime.now();
+    final difference = now.difference(coupleDate).inDays + 1;
 
-  final difference = now.difference(coupleDate).inDays + 1;
-  return '우리가 만난지 $difference일 째💕';
+    return '우리가 만난 지 $difference일 째 💕';
+  } catch (e) {
+    return '날짜를 불러올 수 없습니다';
+  }
 });
