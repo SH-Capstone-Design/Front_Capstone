@@ -5,6 +5,7 @@ import 'package:logging/logging.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_service.dart';
 
 final Logger _logger = Logger('Kakao Login');
@@ -20,8 +21,13 @@ Future<Map<String, dynamic>?> _getUserInfo({
   try {
     User user = await UserApi.instance.me();
 
-    final nickname = user.kakaoAccount?.profile?.nickname ?? '';
-    final profileImageUrl = user.kakaoAccount?.profile?.profileImageUrl;
+    // 카톡에서 가져온 정보
+    final kakaoNickname = user.kakaoAccount?.profile?.nickname ?? '';
+    final kakaoProfileImageUrl = user.kakaoAccount?.profile?.profileImageUrl;
+
+    // 로그 출력
+    _logger.info('카카오톡 프로필 정보 - 닉네임: $kakaoNickname, 프로필 이미지: $kakaoProfileImageUrl');
+    print('카카오톡 프로필 정보 - 닉네임: $kakaoNickname, 프로필 이미지: $kakaoProfileImageUrl');
 
     final Map<String, dynamic> payload = {
       'provider': 'kakao',
@@ -39,13 +45,15 @@ Future<Map<String, dynamic>?> _getUserInfo({
     if (response.statusCode == 200) {
       final resBody = jsonDecode(utf8.decode(response.bodyBytes));
 
-
       _logger.info('백엔드 로그인 성공: $resBody');
 
       final token = resBody['token'];
       final userId = resBody['userId'];
       final nicknameFromBackend = resBody['nickname'];
       final profileImageFromBackend = resBody['profileImage'];
+
+      // 백엔드 정보 로그
+      _logger.info('백엔드 사용자 정보 - 닉네임: $nicknameFromBackend, 프로필 이미지: $profileImageFromBackend');
 
       if (token != null) {
         await AuthService.saveToken(token);
@@ -55,8 +63,8 @@ Future<Map<String, dynamic>?> _getUserInfo({
       }
 
       return {
-        'nickname': nicknameFromBackend ?? nickname,
-        'profileImageUrl': profileImageFromBackend ?? profileImageUrl,
+        'nickname': nicknameFromBackend ?? kakaoNickname,
+        'profileImageUrl': profileImageFromBackend ?? kakaoProfileImageUrl,
         'userId': userId,
       };
     } else {
@@ -69,6 +77,24 @@ Future<Map<String, dynamic>?> _getUserInfo({
   }
 }
 
+/// 로그인 후 커플 연결 체크
+Future<void> _checkCoupleConnection(BuildContext context, Map<String, dynamic> userInfo) async {
+  final prefs = await SharedPreferences.getInstance();
+  final isConnected = prefs.getBool('isCoupleConnected') ?? false;
+
+  if (isConnected) {
+    _logger.info('이미 커플 연결됨 → 홈으로 이동');
+    Navigator.pushReplacementNamed(context, '/home-screen');
+  } else {
+    _logger.info('연결 안 됨 → 프로필 설정 화면으로 이동');
+    Navigator.pushReplacementNamed(
+      context,
+      '/profile_setup',
+      arguments: userInfo,
+    );
+  }
+}
+
 /// 메인 카카오 로그인 함수
 Future<void> signInWithKakao(BuildContext context) async {
   if (await AuthApi.instance.hasToken()) {
@@ -77,9 +103,7 @@ Future<void> signInWithKakao(BuildContext context) async {
       _logger.info('토큰 유효성 체크 성공: ${tokenInfo.id} ${tokenInfo.expiresIn}');
 
       final OAuthToken? token = await TokenManagerProvider.instance.manager.getToken();
-      if (token == null) {
-        throw Exception('토큰 없음');
-      }
+      if (token == null) throw Exception('토큰 없음');
 
       final userInfo = await _getUserInfo(
         idToken: null,
@@ -87,11 +111,7 @@ Future<void> signInWithKakao(BuildContext context) async {
       );
 
       if (userInfo != null) {
-        Navigator.pushReplacementNamed(
-          context,
-          '/profile_setup',
-          arguments: userInfo,
-        );
+        await _checkCoupleConnection(context, userInfo);
       }
     } catch (error) {
       if (error is KakaoException && error.isInvalidTokenError()) {
@@ -120,11 +140,7 @@ Future<void> loginWithKakaoAccount(BuildContext context) async {
       );
 
       if (userInfo != null) {
-        Navigator.pushReplacementNamed(
-          context,
-          '/profile_setup',
-          arguments: userInfo,
-        );
+        await _checkCoupleConnection(context, userInfo);
       }
     } catch (error) {
       _logger.severe('카카오톡으로 로그인 실패: $error');
@@ -148,11 +164,7 @@ Future<void> _loginWithKakaoAccountFallback(BuildContext context) async {
     );
 
     if (userInfo != null) {
-      Navigator.pushReplacementNamed(
-        context,
-        '/profile_setup',
-        arguments: userInfo,
-      );
+      await _checkCoupleConnection(context, userInfo);
     }
   } catch (error) {
     _logger.severe('카카오계정으로 로그인 실패: $error');
