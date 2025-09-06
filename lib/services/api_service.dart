@@ -12,7 +12,7 @@ class ApiService {
     required String accessToken,
   }) async {
     final response = await http.post(
-      Uri.parse('$_baseUrl/user/login'),
+      Uri.parse('$_baseUrl/users/login'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'provider': provider,

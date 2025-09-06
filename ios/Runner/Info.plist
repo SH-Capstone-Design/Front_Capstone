@@ -77,7 +77,7 @@
       <string>Editor</string>
       <key>CFBundleURLSchemes</key>
       <array>
-        <string>kakaoa10c223fbdb14031177450ceab1569621</string> <!-- 여기에 본인의 네이티브 앱 키 기반 스킴 -->
+        <string>kakao10c223fbdb14031177450ceab1569621</string> <!-- 여기에 본인의 네이티브 앱 키 기반 스킴 -->
       </array>
     </dict>
 

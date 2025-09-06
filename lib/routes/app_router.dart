@@ -1,4 +1,5 @@
 import 'package:connectbeat/screens/couple_date_screen.dart';
+import 'package:connectbeat/screens/couple_manage_screen.dart';
 import 'package:connectbeat/screens/create_chat_screen.dart';
 import 'package:connectbeat/screens/home_screen.dart';
 import 'package:connectbeat/screens/invite_partner_screen.dart';
@@ -23,7 +24,7 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const InputCodeScreen());
       case '/home-screen':
         return MaterialPageRoute(builder: (_) => const HomeScreen());
-      case '/coupledate':
+      case '/couple-date':
         return MaterialPageRoute(builder: (_) => const CoupleDateInputScreen());
       case '/setting' :
         return MaterialPageRoute(builder: (_) => const SettingScreen());
@@ -31,6 +32,8 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const CreateChatScreen());
       case '/invite-partner':
         return MaterialPageRoute(builder: (_) => const InvitePartnerScreen());
+      case '/couple-manage':
+        return MaterialPageRoute(builder: (_) => const CoupleManageScreen());
       case '/profile_setup':
         final args = settings.arguments as Map<String, dynamic>;
         return MaterialPageRoute(
