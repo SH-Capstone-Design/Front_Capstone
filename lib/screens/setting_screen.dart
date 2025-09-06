@@ -62,7 +62,7 @@ class _SettingScreenState extends State<SettingScreen> {
                   RoundedButton(
                     text: "디데이 설정",
                     onPressed: () {
-                      Navigator.pushNamed(context, '/coupledate');
+                      Navigator.pushNamed(context, '/couple-date');
                     },
                   ),
 
@@ -71,7 +71,7 @@ class _SettingScreenState extends State<SettingScreen> {
                   RoundedButton(
                     text: "커플 관리",
                     onPressed: () {
-                      Navigator.pushNamed(context, '/couplemanage');
+                      Navigator.pushNamed(context, '/couple-manage');
                     },
                   ),
 
