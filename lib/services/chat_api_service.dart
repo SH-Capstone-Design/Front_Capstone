@@ -8,7 +8,7 @@ class ChatApiService {
 
   /// 공통 헤더
   Future<Map<String, String>> _headers() async {
-    final token = await AuthService.getAuthToken();
+    final token = await AuthService.getToken();
     return {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
