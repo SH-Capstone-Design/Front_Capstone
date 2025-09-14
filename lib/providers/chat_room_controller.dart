@@ -1,5 +1,3 @@
-//방 생성/세션 상태 Notifier
-
 // lib/providers/chat_room_controller.dart
 // 채팅방 생성/세션 상태를 관리하는 Riverpod Notifier
 
@@ -40,14 +38,11 @@ class ChatRoomController extends Notifier<ChatRoomState> {
     return const ChatRoomState();
   }
 
-  /// 10분 세션형 채팅방 생성
-  Future<void> createRoom({required String topicId, String? topicName}) async {
+  /// 10분 세션형 채팅방 생성 (Swagger: POST /api/chat/session/start)
+  Future<void> startSession() async {
     state = state.copyWith(creating: true, error: null);
     try {
-      final room = await _repo.createRoom(
-        topicId: topicId,
-        topicName: topicName,
-      );
+      final room = await _repo.startSession();
       state = state.copyWith(creating: false, room: room);
     } catch (e) {
       state = state.copyWith(creating: false, error: e.toString());
@@ -59,4 +54,6 @@ class ChatRoomController extends Notifier<ChatRoomState> {
 }
 
 final chatRoomControllerProvider =
-NotifierProvider<ChatRoomController, ChatRoomState>(ChatRoomController.new);
+NotifierProvider<ChatRoomController, ChatRoomState>(
+  ChatRoomController.new,
+);
