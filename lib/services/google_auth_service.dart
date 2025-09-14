@@ -43,6 +43,11 @@ if (response.statusCode == 200) {
 debugPrint('✅ 백엔드 로그인 성공');
 final body = jsonDecode(response.body);
 final token = body['token'];
+final jwtToken = body['jwtToken']; // ✅ 올바른 키 사용
+if (jwtToken != null) {
+  await AuthService.saveToken(jwtToken);
+  await AuthService.saveGoogleIdToken(idToken); // 원하면 원본 토큰도 저장
+}
 
 if (token != null) {
 await AuthService.saveToken(token);

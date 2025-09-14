@@ -1,126 +1,72 @@
-// REST 전용 호출방(방 생성 / 종료 / 히스토리).
-// 기존 api_service.dart 래핑/확장
-
-// lib/services/chat_api_service.dart
-// REST 전용 호출 래퍼. 백엔드 규격이 확정되면 엔드포인트만 맞추면 됩니다.
-// - 의존: ApiService (공통 인증/BASE_URL 적용)
-// - 모델: ChatRoom/ChatMessage (services/chat_repository.dart 임시 모델 사용)
-
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:connectbeat/services/api_service.dart';
+import 'package:connectbeat/services/auth_service.dart';
 import 'package:connectbeat/services/chat_repository.dart';
 
 class ChatApiService {
-  const ChatApiService();
+  static const String _baseUrl = "http://13.125.197.173:8080/api/chat";
 
-  // TODO(backend): 백엔드 팀 규격에 맞춰 경로/쿼리 키를 조정하세요.
-  static const String _roomsPath = '/chat/rooms';
-
-  /// 방 생성 (세션)
-  /// POST /chat/rooms { topicId, topicName? }
-  Future<ChatRoom> createRoom({
-    required String topicId,
-    String? topicName,
-  }) async {
-    final http.Response res = await ApiService.postWithAuth(
-      _roomsPath,
-      body: <String, dynamic>{
-        'topicId': topicId,
-        if (topicName != null) 'topicName': topicName,
-      },
-    );
-    final Map<String, dynamic> data = _decodeJson(res);
-    return ChatRoom.fromJson(data);
-  }
-
-  /// 세션 종료 → 분석 파이프라인 트리거
-  /// POST /chat/rooms/{roomId}/close
-  Future<void> closeRoom(String roomId) async {
-    final http.Response res = await ApiService.postWithAuth(
-      '$_roomsPath/$roomId/close',
-    );
-    _ensure2xx(res);
-  }
-
-  /// 메시지 히스토리 조회 (옵션)
-  /// GET /chat/rooms/{roomId}/messages?cursor=...&size=50
-  Future<List<ChatMessage>> fetchHistory(
-      String roomId, {
-        String? cursor,
-        int size = 50,
-      }) async {
-    final query = <String, String>{
-      'size': size.toString(),
-      if (cursor != null) 'cursor': cursor,
+  /// 공통 헤더
+  Future<Map<String, String>> _headers() async {
+    final token = await AuthService.getAuthToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
     };
-    final path = _buildPathWithQuery('$_roomsPath/$roomId/messages', query);
-    final http.Response res = await ApiService.getWithAuth(path);
-    final dynamic jsonBody = _decodeJsonDynamic(res);
-
-    if (jsonBody is List) {
-      return jsonBody
-          .cast<Map<String, dynamic>>()
-          .map(ChatMessage.fromJson)
-          .toList(growable: false);
-    }
-    if (jsonBody is Map && jsonBody['items'] is List) {
-      // { items: [...], nextCursor: '...' } 형태도 지원
-      final items = (jsonBody['items'] as List).cast<Map<String, dynamic>>();
-      return items.map(ChatMessage.fromJson).toList(growable: false);
-    }
-    throw FormatException('Unexpected history response format');
   }
 
-  /// (대안) REST로 메시지 전송
-  /// POST /chat/rooms/{roomId}/messages { text, type? }
-  Future<void> sendMessageRest({
-    required String roomId,
-    required String text,
-    String type = 'text',
-  }) async {
-    final http.Response res = await ApiService.postWithAuth(
-      '$_roomsPath/$roomId/messages',
-      body: <String, dynamic>{
-        'text': text,
-        'type': type,
-      },
+  /// 세션 시작: POST /api/chat/session/start
+  Future<ChatRoom> startSession() async {
+    final headers = await _headers();
+    final url = Uri.parse("$_baseUrl/session/start");
+
+    final res = await http.post(url, headers: headers);
+
+    if (res.statusCode == 200) {
+      final body = jsonDecode(res.body);
+      return ChatRoom.fromJson(body);
+    } else {
+      throw Exception("세션 시작 실패: [${res.statusCode}] ${res.body}");
+    }
+  }
+
+  /// 세션 종료: POST /api/chat/session/end
+  Future<void> closeSession(String chatSessionId) async {
+    final headers = await _headers();
+    final url = Uri.parse("$_baseUrl/session/end");
+
+    final res = await http.post(
+      url,
+      headers: headers,
+      body: jsonEncode({"chatSessionId": chatSessionId}),
     );
-    _ensure2xx(res);
-  }
 
-  // --- helpers ---
-
-  Map<String, dynamic> _decodeJson(http.Response res) {
-    _ensure2xx(res);
-    final dynamic body = json.decode(res.body);
-    if (body is Map<String, dynamic>) return body;
-    throw const FormatException('Expected JSON object');
-  }
-
-  dynamic _decodeJsonDynamic(http.Response res) {
-    _ensure2xx(res);
-    return json.decode(res.body);
-  }
-
-  void _ensure2xx(http.Response res) {
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw HttpException('[${res.statusCode}] ${res.body}');
+    if (res.statusCode != 200) {
+      throw Exception("세션 종료 실패: [${res.statusCode}] ${res.body}");
     }
   }
 
-  String _buildPathWithQuery(String base, Map<String, String> query) {
-    if (query.isEmpty) return base;
-    final encoded = query.entries
-        .map((e) => '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}')
-        .join('&');
-    return '$base?$encoded';
-  }
-}
+  /// 메시지 전송 (소켓 없는 경우 대체용)
+  Future<void> sendMessageRest({
+    required String chatSessionId,
+    required String senderId,
+    required String content,
+  }) async {
+    final headers = await _headers();
+    final url = Uri.parse("$_baseUrl/message");
 
-class HttpException implements Exception {
-  final String message;
-  const HttpException(this.message);
-  @override
-  String toString() => 'HttpException: $message';
+    final res = await http.post(
+      url,
+      headers: headers,
+      body: jsonEncode({
+        "chatSessionId": chatSessionId,
+        "senderId": senderId,
+        "content": content,
+      }),
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception("메시지 전송 실패: [${res.statusCode}] ${res.body}");
+    }
+  }
 }

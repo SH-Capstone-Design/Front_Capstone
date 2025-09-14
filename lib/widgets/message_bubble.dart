@@ -2,7 +2,7 @@
 // 말풍선 UI. isMine 여부에 따라 정렬/색상/꼬리 모양이 달라집니다.
 
 import 'package:flutter/material.dart';
-import 'package:connectbeat/services/chat_repository.dart'; // ChatMessage 임시 모델 참조
+import 'package:connectbeat/services/chat_repository.dart'; // ChatMessage 모델 참조
 
 class MessageBubble extends StatelessWidget {
   const MessageBubble({
@@ -63,7 +63,7 @@ class MessageBubble extends StatelessWidget {
                       horizontal: 14,
                     ),
                     child: Text(
-                      message.text,
+                      message.content, // ✅ text → content
                       style: TextStyle(color: textColor, fontSize: 16),
                     ),
                   ),

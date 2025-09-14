@@ -38,18 +38,38 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   }
 
   // 최신 카카오 프로필 가져오기
+  // Future<void> _fetchLatestProfile() async {
+  //   try {
+  //     final user = await UserApi.instance.me();
+  //     setState(() {
+  //       _latestProfileUrl = user.kakaoAccount?.profile?.profileImageUrl;
+  //     });
+  //   } catch (e) {
+  //     print('최신 프로필 URL 가져오기 실패: $e');
+  //     setState(() {
+  //       _latestProfileUrl = widget.profileImageUrl;
+  //     });
+  //   }
+  // }
   Future<void> _fetchLatestProfile() async {
     try {
-      final user = await UserApi.instance.me();
-      setState(() {
-        _latestProfileUrl = user.kakaoAccount?.profile?.profileImageUrl;
-      });
+      // 카카오 로그인으로 들어온 경우에만 실행
+      final hasKakaoToken = await AuthApi.instance.hasToken();
+      if (hasKakaoToken) {
+        final user = await UserApi.instance.me();
+        setState(() {
+          _latestProfileUrl = user.kakaoAccount?.profile?.profileImageUrl;
+        });
+        return;
+      }
     } catch (e) {
-      print('최신 프로필 URL 가져오기 실패: $e');
-      setState(() {
-        _latestProfileUrl = widget.profileImageUrl;
-      });
+      print('카카오 프로필 가져오기 실패: $e');
     }
+
+    // 기본값 (구글 로그인 시)
+    setState(() {
+      _latestProfileUrl = widget.profileImageUrl;
+    });
   }
 
   Future<void> _pickImage() async {
@@ -92,72 +112,78 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             ),
           ),
           SafeArea(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: size.width * 0.06),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(height: topPadding),
+            child: SingleChildScrollView(   // ✅ 스크롤 가능하게 변경
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: size.width * 0.06),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min, // ✅ 중요
+                  children: [
+                    SizedBox(height: topPadding),
 
-                  // 로고
-                  SizedBox(
-                    height: logoHeight,
-                    child: Image.asset(
-                      AppConstants.logoPath,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // 프로필 이미지
-                  Center(
-                    child: GestureDetector(
-                      onTap: _pickImage,
-                      child: CircleAvatar(
-                        radius: 60,
-                        backgroundColor: Colors.white,
-                        backgroundImage: _pickedImage != null
-                            ? FileImage(_pickedImage!)
-                            : (_latestProfileUrl != null
-                            ? NetworkImage(_latestProfileUrl!) as ImageProvider
-                            : null),
-                        child: (_pickedImage == null && _latestProfileUrl == null)
-                            ? const Icon(Icons.person, size: 60, color: Colors.grey)
-                            : null,
+                    // 로고
+                    SizedBox(
+                      height: logoHeight,
+                      child: Image.asset(
+                        AppConstants.logoPath,
+                        fit: BoxFit.contain,
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 16),
+                    const SizedBox(height: 16),
 
-                  const Center(
-                    child: Text('프로필 설정', style: TextStyle(fontSize: 14)),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // 닉네임 입력 필드
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: TextFormField(
-                      controller: _nicknameController,
-                      decoration: const InputDecoration(
-                        hintText: '닉네임 설정',
-                        border: UnderlineInputBorder(),
+                    // 프로필 이미지
+                    Center(
+                      child: GestureDetector(
+                        onTap: _pickImage,
+                        child: CircleAvatar(
+                          radius: 60,
+                          backgroundColor: Colors.white,
+                          backgroundImage: _pickedImage != null
+                              ? FileImage(_pickedImage!)
+                              : (_latestProfileUrl != null
+                              ? NetworkImage(_latestProfileUrl!)
+                              : null),
+                          child: (_pickedImage == null &&
+                              _latestProfileUrl == null)
+                              ? const Icon(Icons.person,
+                              size: 60, color: Colors.grey)
+                              : null,
+                        ),
                       ),
                     ),
-                  ),
 
-                  const Spacer(flex: 2),
+                    const SizedBox(height: 16),
 
-                  RoundedButton(
-                    text: '커플 연결하기',
-                    onPressed: _onContinuePressed,
-                  ),
+                    const Center(
+                      child: Text('프로필 설정',
+                          style: TextStyle(fontSize: 14)),
+                    ),
 
-                  const Spacer(flex: 1),
-                ],
+                    const SizedBox(height: 8),
+
+                    // 닉네임 입력 필드
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: TextFormField(
+                        controller: _nicknameController,
+                        decoration: const InputDecoration(
+                          hintText: '닉네임 설정',
+                          border: UnderlineInputBorder(),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 40), // ✅ Spacer 대신 SizedBox 사용
+
+                    RoundedButton(
+                      text: '커플 연결하기',
+                      onPressed: _onContinuePressed,
+                    ),
+
+                    const SizedBox(height: 20), // ✅ Spacer 대신 SizedBox 사용
+                  ],
+                ),
               ),
             ),
           ),
