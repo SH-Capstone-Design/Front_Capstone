@@ -1,23 +1,24 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/widgets/rounded_button.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../providers/couple_date_provider.dart';
 
-class CoupleDateInputScreen extends StatefulWidget {
-  const CoupleDateInputScreen({super.key});
+class CoupleDateScreen extends ConsumerStatefulWidget {
+  const CoupleDateScreen({super.key});
 
   @override
-  State<CoupleDateInputScreen> createState() => _CoupleDateInputScreenState();
+  ConsumerState<CoupleDateScreen> createState() => _CoupleDateScreenState();
 }
 
-class _CoupleDateInputScreenState extends State<CoupleDateInputScreen> {
-  FixedExtentScrollController? yearController;
-  FixedExtentScrollController? monthController;
-  FixedExtentScrollController? dayController;
+class _CoupleDateScreenState extends ConsumerState<CoupleDateScreen> {
+  late FixedExtentScrollController yearController;
+  late FixedExtentScrollController monthController;
+  late FixedExtentScrollController dayController;
 
   late List<int> years;
-  late List<int> months;
+  final List<int> months = List.generate(12, (index) => index + 1);
   late List<int> days;
 
   int selectedYearIndex = 0;
@@ -27,58 +28,37 @@ class _CoupleDateInputScreenState extends State<CoupleDateInputScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSavedDate();
+    _initDate();
   }
 
-  Future<void> _loadSavedDate() async {
-    final prefs = await SharedPreferences.getInstance();
-    final dateStr = prefs.getString('coupleDate');
+  void _initDate() {
+    final savedDate = ref.read(coupleDateProvider) ?? DateTime.now();
+    final currentYear = DateTime.now().year;
 
-    DateTime now = DateTime.now();
-    DateTime selectedDate;
-
-    if (dateStr != null) {
-      try {
-        selectedDate = DateTime.parse(dateStr);
-      } catch (e) {
-        selectedDate = now;
-      }
-    } else {
-      selectedDate = now;
-    }
-
-    final currentYear = now.year;
     years = List.generate(currentYear - 1900 + 1, (index) => 1900 + index);
-    months = List.generate(12, (index) => index + 1);
 
-    selectedYearIndex = years.indexOf(selectedDate.year);
+    selectedYearIndex = years.indexOf(savedDate.year);
     if (selectedYearIndex == -1) selectedYearIndex = years.length - 1;
 
-    selectedMonthIndex = selectedDate.month - 1;
+    selectedMonthIndex = savedDate.month - 1;
 
     _updateDays();
-    selectedDayIndex = (selectedDate.day - 1).clamp(0, days.length - 1);
-
-    yearController?.dispose();
-    monthController?.dispose();
-    dayController?.dispose();
+    selectedDayIndex = (savedDate.day - 1).clamp(0, days.length - 1);
 
     yearController = FixedExtentScrollController(initialItem: selectedYearIndex);
     monthController = FixedExtentScrollController(initialItem: selectedMonthIndex);
     dayController = FixedExtentScrollController(initialItem: selectedDayIndex);
-
-    setState(() {});
   }
 
   void _updateDays() {
-    int year = years[selectedYearIndex];
-    int month = months[selectedMonthIndex];
-    int lastDay = DateTime(year, month + 1, 0).day;
+    final year = years[selectedYearIndex];
+    final month = months[selectedMonthIndex];
+    final lastDay = DateTime(year, month + 1, 0).day;
     days = List.generate(lastDay, (index) => index + 1);
 
     if (selectedDayIndex >= days.length) {
       selectedDayIndex = days.length - 1;
-      dayController?.jumpToItem(selectedDayIndex);
+      dayController.jumpToItem(selectedDayIndex);
     }
   }
 
@@ -102,116 +82,136 @@ class _CoupleDateInputScreenState extends State<CoupleDateInputScreen> {
     });
   }
 
-  Future<void> _saveDate() async {
+  void _saveDate() {
     final selectedDate = DateTime(
       years[selectedYearIndex],
       months[selectedMonthIndex],
       days[selectedDayIndex],
     );
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('coupleDate', selectedDate.toIso8601String());
-
-    Navigator.pop(context, selectedDate);
+    ref.read(coupleDateProvider.notifier).save(selectedDate);
+    Navigator.pop(context);
   }
 
-  Widget _buildPicker(List<int> items, FixedExtentScrollController? controller,
-      ValueChanged<int> onSelectedItemChanged, String suffix) {
+  Widget _buildPicker(List<int> items, FixedExtentScrollController controller,
+      ValueChanged<int> onChanged, String suffix) {
     return Expanded(
-      child: CupertinoPicker(
-        scrollController: controller,
-        itemExtent: 32,
-        backgroundColor: Colors.white.withOpacity(0.8),
-        onSelectedItemChanged: onSelectedItemChanged,
-        children: items
-            .map((e) => Center(
-          child: Text(
-            '$e $suffix',
-            style: const TextStyle(color: Colors.black87),
-          ),
-        ))
-            .toList(),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: CupertinoPicker(
+          scrollController: controller,
+          itemExtent: 36,
+          backgroundColor: Colors.transparent,
+          onSelectedItemChanged: onChanged,
+          children: items
+              .map(
+                (e) => Center(
+              child: Text(
+                '$e $suffix',
+                style: const TextStyle(
+                  fontFamily: 'GowunBatang',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+          )
+              .toList(),
+        ),
       ),
     );
   }
 
   @override
   void dispose() {
-    yearController?.dispose();
-    monthController?.dispose();
-    dayController?.dispose();
+    yearController.dispose();
+    monthController.dispose();
+    dayController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final paddingHorizontal = size.width * 0.06;
-    final topPadding = size.height * 0.02;
-    final spacingLarge = size.height * 0.05;
-    final spacingMedium = size.height * 0.03;
+    final horizontalPadding = size.width * 0.06;
 
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage(AppConstants.backgroundPath),
-            fit: BoxFit.cover,
+      appBar: AppBar(
+        title: const Text(
+          '디데이 설정',
+          style: TextStyle(
+            fontFamily: 'GowunBatang',
+            color: Colors.black,
           ),
         ),
-        child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: paddingHorizontal,
-              vertical: topPadding,
+        backgroundColor: Colors.transparent, // 배경과 일체화
+        elevation: 0,                        // 그림자 제거
+        foregroundColor: Colors.black,       // 뒤로가기 버튼 색상
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios),
+          onPressed: () => Navigator.pop(context),
+        ),
+        centerTitle: true,
+      ),
+      body: Stack(
+        children: [
+          SizedBox.expand(
+            child: Image.asset(
+              AppConstants.backgroundPath,
+              fit: BoxFit.cover,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(
-                  height: size.height * 0.15,
-                  child: Image.asset(
-                    AppConstants.logoPath,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-                SizedBox(height: spacingLarge),
-                const Text(
-                  '사귄 날짜를 선택해주세요',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                    shadows: [
-                      Shadow(
-                        blurRadius: 4,
-                        color: Colors.black45,
-                        offset: Offset(1, 1),
+          ),
+          SafeArea(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(height: size.height * 0.2),
+                    const Text(
+                      '사귄 날짜를 선택해주세요',
+                      style: TextStyle(
+                        fontFamily: 'GowunBatang',
+                        fontSize: 20,
+                        color: Colors.black,
+                        shadows: [
+                          Shadow(
+                            blurRadius: 4,
+                            color: Colors.black45,
+                            offset: Offset(1, 1),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  textAlign: TextAlign.center,
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: size.height * 0.03),
+                    SizedBox(
+                      height: size.height * 0.25,
+                      child: Row(
+                        children: [
+                          _buildPicker(years, yearController, _onYearChanged, '년'),
+                          _buildPicker(months, monthController, _onMonthChanged, '월'),
+                          _buildPicker(days, dayController, _onDayChanged, '일'),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: size.height * 0.05),
+                    RoundedButton(
+                      text: '저장',
+                      onPressed: _saveDate,
+                    ),
+                    SizedBox(height: size.height * 0.05),
+                  ],
                 ),
-                SizedBox(height: spacingMedium),
-                SizedBox(
-                  height: size.height * 0.22,
-                  child: Row(
-                    children: [
-                      _buildPicker(years, yearController, _onYearChanged, '년'),
-                      _buildPicker(months, monthController, _onMonthChanged, '월'),
-                      _buildPicker(days, dayController, _onDayChanged, '일'),
-                    ],
-                  ),
-                ),
-                SizedBox(height: spacingLarge),
-                RoundedButton(
-                  text: '저장',
-                  onPressed: _saveDate,
-                ),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

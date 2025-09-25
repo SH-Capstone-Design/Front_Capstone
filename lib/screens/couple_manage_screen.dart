@@ -42,7 +42,11 @@ class CoupleManageScreen extends StatelessWidget {
     if (token == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("로그인이 필요합니다.")),
+          const SnackBar(
+              content: Text(
+                "로그인이 필요합니다.",
+                style: TextStyle(fontFamily: 'GamjaFlower'),
+              )),
         );
       }
       return;
@@ -59,14 +63,23 @@ class CoupleManageScreen extends StatelessWidget {
     if (response.statusCode == 200) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("커플이 해제되었습니다.")),
+          const SnackBar(
+              content: Text(
+                "커플이 해제되었습니다.",
+                style: TextStyle(fontFamily: 'GamjaFlower'),
+              )),
         );
         Navigator.pop(context);
       }
     } else {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("커플 해제에 실패했습니다. (${response.statusCode})")),
+          SnackBar(
+            content: Text(
+              "커플 해제에 실패했습니다. (${response.statusCode})",
+              style: const TextStyle(fontFamily: 'GamjaFlower'),
+            ),
+          ),
         );
       }
     }
@@ -74,7 +87,24 @@ class CoupleManageScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const titleFontSize = 22.0; // 글자 크기 일관성
+    const codeFontSize = 18.0;
+
     return Scaffold(
+      extendBodyBehindAppBar: true, // 배경 이미지가 앱바까지 적용되도록
+      appBar: AppBar(
+        title: const Text(
+          '커플 관리',
+          style: TextStyle(
+            fontFamily: 'GowunBatang',
+            fontSize: titleFontSize,
+            color: Colors.black
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
       body: Container(
         decoration: BoxDecoration(
           image: DecorationImage(
@@ -84,96 +114,82 @@ class CoupleManageScreen extends StatelessWidget {
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // 뒤로가기 버튼
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back_ios, color: Colors.black87),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: FutureBuilder<Map<String, dynamic>>(
+              future: fetchCoupleInfo(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return const Center(
+                    child: Text(
+                      '커플 정보를 불러오지 못했습니다',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontFamily: 'GowunBatang',
+                      ),
+                    ),
+                  );
+                }
 
-                const SizedBox(height: 8),
+                final data = snapshot.data!;
+                final code = data['code'] ?? '-';
+                final partnerNickname = data['partnerNickname'] ?? '-';
 
-                // 제목
-                const Text(
-                  '커플 관리',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-
-                const SizedBox(height: 48),
-
-                // 커플 코드 & 파트너 정보
-                FutureBuilder<Map<String, dynamic>>(
-                  future: fetchCoupleInfo(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const CircularProgressIndicator();
-                    }
-                    if (snapshot.hasError) {
-                      return const Text(
-                        '커플 정보를 불러오지 못했습니다',
-                        style: TextStyle(color: Colors.red),
-                      );
-                    }
-
-                    final data = snapshot.data!;
-                    final code = data['code'] ?? '-';
-                    final partnerNickname = data['partnerNickname'] ?? '-';
-
-                    return Column(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-                          decoration: BoxDecoration(
-                            color: Colors.pink.shade50,
-                            borderRadius: BorderRadius.circular(30),
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 80), // 앱바 아래 여백
+                    // 커플 코드 박스
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 16, horizontal: 24),
+                      decoration: BoxDecoration(
+                        color: Colors.pink.shade50,
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            '커플 코드',
+                            style: TextStyle(
+                              fontFamily: 'GowunBatang',
+                              fontSize: codeFontSize,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                '커플 코드',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  color: Colors.black87,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              Text(
-                                code,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  color: Colors.black87,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
+                          Text(
+                            code,
+                            style: const TextStyle(
+                              fontFamily: 'GowunBatang',
+                              fontSize: codeFontSize,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          '파트너: $partnerNickname',
-                          style: const TextStyle(fontSize: 16, color: Colors.black54),
-                        ),
-                        const SizedBox(height: 24),
-                        RoundedButton(
-                          text: '커플 해제',
-                          onPressed: () => unlinkCouple(context),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '파트너: $partnerNickname',
+                      style: const TextStyle(
+                        fontFamily: 'GowunBatang',
+                        fontSize: codeFontSize - 2,
+                        color: Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    RoundedButton(
+                      text: '커플 해제',
+                      onPressed: () => unlinkCouple(context),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),

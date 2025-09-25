@@ -3,13 +3,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:connectbeat/providers/current_user_provider.dart';
 import 'auth_service.dart';
+import 'package:connectbeat/providers/current_user_provider.dart';
 
 class ApiService {
   static final String _baseUrl = dotenv.env['BASE_URL'] ?? '';
 
-  // 🔐 로그인 API (provider + accessToken 전달)
+  /// 🔐 소셜 로그인 API (JWT 토큰 저장 + 사용자 상태 업데이트)
   static Future<void> loginWithProvider({
     required WidgetRef ref,
     required String provider,
@@ -27,30 +27,45 @@ class ApiService {
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
 
-      // ✅ 응답에서 userId 추출 후 Provider에 저장
+      // ✅ JWT 토큰 저장
+      final token = data['token'];
+      await AuthService.saveToken(token);
+
+      // ✅ 사용자 정보 저장
       final userId = data['userId'];
       ref.read(currentUserProvider.notifier).state = userId;
 
-      // 디버그 로그
       print("✅ Login success, userId = $userId");
+      print("🔑 Token saved: $token");
     } else {
-      throw Exception('Login failed: ${response.statusCode}');
+      print("❌ Login failed: ${response.statusCode}, ${response.body}");
     }
   }
 
-  // 🔐 인증 토큰을 포함한 POST 요청
+  /// 🔐 인증 토큰 포함 GET 요청
+  static Future<http.Response> getWithAuth(String endpoint) async {
+    final token = await AuthService.getToken();
+    return await http.get(
+      Uri.parse('$_baseUrl$endpoint'),
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+    );
+  }
+
+  /// 🔐 인증 토큰 포함 POST 요청
   static Future<http.Response> postWithAuth(
       String endpoint, {
         Map<String, dynamic>? body,
       }) async {
     final token = await AuthService.getToken();
-
     final headers = {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
     };
 
-    // ✅ 디버그 로그 추가
+    // ✅ 디버그 로그
     print("🔗 POST $_baseUrl$endpoint");
     print("📦 Headers: $headers");
     if (body != null) print("📤 Body: $body");
@@ -65,16 +80,23 @@ class ApiService {
     return response;
   }
 
-  // 🔐 인증 토큰을 포함한 GET 요청
-  static Future<http.Response> getWithAuth(String endpoint) async {
+  /// 🔐 인증 토큰 포함 PUT 요청
+  static Future<http.Response> putWithAuth(
+      String endpoint, {
+        Map<String, dynamic>? body,
+      }) async {
     final token = await AuthService.getToken();
+    final headers = {
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
 
-    return await http.get(
+    final response = await http.put(
       Uri.parse('$_baseUrl$endpoint'),
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
+      headers: headers,
+      body: body != null ? jsonEncode(body) : null,
     );
+
+    return response;
   }
 }

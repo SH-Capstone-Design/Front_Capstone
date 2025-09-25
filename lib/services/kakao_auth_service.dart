@@ -58,6 +58,8 @@ Future<Map<String, dynamic>?> _getUserInfo({
       if (token != null) {
         await AuthService.saveToken(token);
         _logger.info('JWT 토큰 저장 완료: $token');
+        print("JWT 토큰: $token");
+        _logger.info('JWT 토큰 저장 완료: $token');
       } else {
         _logger.warning('응답에 토큰이 없습니다.');
       }

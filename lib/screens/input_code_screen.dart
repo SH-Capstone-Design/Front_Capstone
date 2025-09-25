@@ -19,11 +19,6 @@ class InputCodeScreen extends ConsumerStatefulWidget {
 }
 
 class _InputCodeScreenState extends ConsumerState<InputCodeScreen> {
-  @override
-  void initState() {
-    super.initState();
-  }
-
   /// 커플 코드 입력 후 API 호출
   Future<String?> _connectCouple(String code) async {
     final token = await AuthService.getToken();
@@ -69,7 +64,7 @@ class _InputCodeScreenState extends ConsumerState<InputCodeScreen> {
     ref.read(codeLoadingProvider.notifier).state = true;
     ref.read(codeErrorProvider.notifier).state = null;
 
-    // 마스터 코드 처리 (필요 시)
+    // 마스터 코드 처리
     if (code == 'connectbeat') {
       await Future.delayed(const Duration(milliseconds: 500));
       final prefs = await SharedPreferences.getInstance();
@@ -86,7 +81,6 @@ class _InputCodeScreenState extends ConsumerState<InputCodeScreen> {
     ref.read(codeLoadingProvider.notifier).state = false;
 
     if (errorMsg == null) {
-      // 연결 성공 → 홈 이동
       Navigator.pushReplacementNamed(context, '/home-screen');
     } else {
       ref.read(codeErrorProvider.notifier).state = errorMsg;
@@ -140,20 +134,33 @@ class _InputCodeScreenState extends ConsumerState<InputCodeScreen> {
                     onChanged: (value) =>
                     ref.read(codeInputProvider.notifier).state = value,
                     textAlign: TextAlign.center,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: '초대 코드 입력',
+                      hintStyle: TextStyle(
+                        fontFamily: 'GowunBatang', // 직접 지정
+                        fontSize: screenHeight * 0.02,
+                        color: Colors.grey[600],
+                      ),
                       border: InputBorder.none,
                       isDense: true,
-                      contentPadding: EdgeInsets.symmetric(vertical: 14),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    style: TextStyle(fontSize: screenHeight * 0.022),
+                    style: TextStyle(
+                      fontFamily: 'GowunBatang', // 직접 지정
+                      fontSize: screenHeight * 0.022,
+                      color: Colors.black87,
+                    ),
                   ),
                 ),
                 if (errorMessage != null) ...[
                   SizedBox(height: screenHeight * 0.01),
                   Text(
                     errorMessage,
-                    style: const TextStyle(color: Colors.redAccent),
+                    style: TextStyle(
+                      fontFamily: 'GowunBatang', // 직접 지정
+                      fontSize: screenHeight * 0.018,
+                      color: Colors.redAccent,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ],

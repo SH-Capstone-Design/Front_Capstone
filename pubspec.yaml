@@ -21,6 +21,8 @@ dependencies:
   flutter_secure_storage: ^9.0.0
   shared_preferences: ^2.2.2
   stomp_dart_client: ^0.4.4
+  fl_chart: ^0.69.0
+  flutter_animate: ^4.2.0
 
 dev_dependencies:
   flutter_test:
@@ -32,3 +34,13 @@ flutter:
   assets:
     - assets/images/
     - .env
+  fonts:
+    - family: GamjaFlower
+      fonts:
+        - asset: assets/fonts/GamjaFlower-Regular.ttf
+    - family: GowunBatang
+      fonts:
+        - asset: assets/fonts/GowunBatang-Regular.ttf
+    - family: PoorStory
+      fonts:
+        - asset: assets/fonts/PoorStory-Regular.ttf

@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/providers/couple_date_provider.dart';
+import 'package:connectbeat/providers/user_provider.dart';
 import 'package:connectbeat/widgets/bottom_bar.dart';
-import 'package:connectbeat/main.dart';
+import 'myprofile_setting_screen.dart';
+import 'setting_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -12,159 +15,161 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> with RouteAware {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 2;
+  late PageController _pageController;
+
+  // 👁️ 캐릭터 깜빡임 제어
+  late Timer _blinkTimer;
+  bool _isEyeOpen = true;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // RouteObserver 등록
-    routeObserver.subscribe(this, ModalRoute.of(context)!);
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: _currentIndex);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(userProvider.notifier).fetchUser();
+    });
+
+    // 👁️ 1초마다 눈 깜빡임 토글
+    _blinkTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _isEyeOpen = !_isEyeOpen;
+      });
+    });
   }
 
   @override
   void dispose() {
-    // RouteObserver 해제
-    routeObserver.unsubscribe(this);
+    _pageController.dispose();
+    _blinkTimer.cancel(); // 👁️ 타이머 정리
     super.dispose();
   }
 
   @override
-  void didPopNext() {
-    // CoupleDateScreen이나 다른 화면에서 돌아왔을 때
-    ref.invalidate(coupleDDayProvider);
-
-    // 홈 화면이므로 하단바 인덱스를 2로 갱신
-    setState(() {
-      _currentIndex = 2;
-    });
-  }
-
-  void _onTabTapped(int index) {
-    setState(() {
-      _currentIndex = index;
-    });
-
-    switch (index) {
-      case 0:
-        Navigator.pushNamed(context, '/history');
-        break;
-      case 1:
-        Navigator.pushNamed(context, '/character');
-        break;
-      case 2:
-      // 현재 홈
-        break;
-      case 3:
-        Navigator.pushNamed(context, '/setting');
-        break;
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final dDayAsyncValue = ref.watch(coupleDDayProvider);
-    final size = MediaQuery.of(context).size;
+    final user = ref.watch(userProvider);
+    final coupleDateNotifier = ref.watch(coupleDateProvider.notifier);
 
-    return WillPopScope(
-      onWillPop: () async {
-        // 뒤로가기 막기
-        return false;
-      },
-      child: Scaffold(
-        body: Container(
-          width: double.infinity,
-          height: double.infinity,
-          decoration: BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage(AppConstants.backgroundPath),
-              fit: BoxFit.cover,
-            ),
-          ),
-          child: SafeArea(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: size.width * 0.06),
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    SizedBox(height: size.height * 0.02),
-                    SizedBox(
-                      height: size.height * 0.15,
-                      child: Image.asset(AppConstants.logoPath),
+    if (user == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final screens = [
+      Container(), // 대화 기록 화면
+      Container(), // 캐릭터 화면
+      SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            children: [
+              const SizedBox(height: 16),
+
+              // ✅ 프로필 카드
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const MyProfileSettingScreen(),
                     ),
-                    SizedBox(height: size.height * 0.05),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pushNamed(context, '/create-chat');
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.symmetric(vertical: size.height * 0.06),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFE6F4),
-                          borderRadius: BorderRadius.circular(size.width * 0.06),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            '오늘 우리의 10분',
-                            style: TextStyle(fontSize: 18),
-                          ),
-                        ),
+                  );
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
                       ),
-                    ),
-                    SizedBox(height: size.height * 0.015),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Container(
-                        width: size.width * 0.5,
-                        padding: EdgeInsets.symmetric(vertical: size.height * 0.015),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFE6F4),
-                          borderRadius: BorderRadius.circular(size.width * 0.1),
-                        ),
-                        child: Center(
-                          child: dDayAsyncValue.when(
-                            data: (dDayText) => Text(
-                              dDayText,
-                              style: const TextStyle(fontSize: 16),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 30,
+                        backgroundImage: user['profileImage'] != null &&
+                            user['profileImage']!.isNotEmpty
+                            ? NetworkImage(user['profileImage'])
+                            : AssetImage(AppConstants.logoPath) as ImageProvider,
+                        backgroundColor: Colors.grey[200],
+                      ),
+                      const SizedBox(width: 16),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            user['nickname'] ?? '닉네임 없음',
+                            style: const TextStyle(
+                              fontFamily: 'GowunBatang',
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
                             ),
-                            loading: () => const CircularProgressIndicator(),
-                            error: (_, __) => const Text('에러 발생'),
                           ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: size.height * 0.03),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pushNamed(context, '/backgroundCharacter');
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        height: size.height * 0.25,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey, width: 2),
-                          borderRadius: BorderRadius.circular(size.width * 0.03),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            '성장시킬 캐릭터 자리',
-                            style: TextStyle(fontSize: 18, color: Colors.grey),
+                          const SizedBox(height: 4),
+                          Text(
+                            coupleDateNotifier.getDDayText(),
+                            style: const TextStyle(
+                              fontFamily: 'GowunBatang',
+                              fontSize: 14,
+                              color: Colors.grey,
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                    ),
-                    SizedBox(height: size.height * 0.05),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
+
+              const Spacer(),
+
+              // ✅ 캐릭터 깜빡임
+              Container(
+                margin: const EdgeInsets.only(bottom: 80), // 하단바랑 겹치지 않게 띄움
+                height: 200,
+                child: Center(
+                  child: Image.asset(
+                    _isEyeOpen
+                        ? 'assets/images/ConnectBeatCharacter.png'
+                        : 'assets/images/ConnectBeatCharacter2.png',
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        bottomNavigationBar: BottomBar(
-          currentIndex: _currentIndex,
-          onTap: _onTabTapped,
-        ),
+      ),
+      const SettingScreen(),
+    ];
+
+    return Scaffold(
+      body: PageView(
+        controller: _pageController,
+        onPageChanged: (index) {
+          setState(() => _currentIndex = index);
+        },
+        children: screens,
+      ),
+      bottomNavigationBar: BottomBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() => _currentIndex = index);
+          _pageController.animateToPage(
+            index,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+        },
       ),
     );
   }
