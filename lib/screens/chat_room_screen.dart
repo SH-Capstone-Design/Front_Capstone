@@ -1,205 +1,240 @@
-// lib/screens/chat_room_screen.dart
 import 'dart:async';
-import 'package:connectbeat/screens/analysis_result_screen.dart';
+import 'package:connectbeat/models/chat_room.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:connectbeat/services/chat_repository.dart';
-import 'package:connectbeat/providers/chat_messages_controller.dart';
-import 'package:connectbeat/providers/chat_repository_provider.dart';
-import 'package:connectbeat/widgets/message_bubble.dart';
-import 'package:connectbeat/widgets/message_input_bar.dart';
-import 'package:connectbeat/widgets/end_chat_dialog.dart';
 
-class ChatRoomScreen extends ConsumerStatefulWidget {
+class ChatRoomScreen extends StatefulWidget {
+  final ChatRoom room;
+  final String currentUserId;
+
   const ChatRoomScreen({
     super.key,
     required this.room,
     required this.currentUserId,
   });
 
-  /// 생성된 채팅 세션
-  final ChatRoom room;
-
-  /// 로그인 사용자 ID
-  final String currentUserId;
-
   @override
-  ConsumerState<ChatRoomScreen> createState() => _ChatRoomScreenState();
+  State<ChatRoomScreen> createState() => _ChatRoomScreenState();
 }
 
-class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
-  static const int _sessionSeconds = 600; // 10분
-  late int _remain = _sessionSeconds;
+class _ChatRoomScreenState extends State<ChatRoomScreen> {
+  final TextEditingController _controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+
+  final List<Map<String, String>> _messages = [];
+
+  static const int _totalSeconds = 600;
+  late int _remainingSeconds;
   Timer? _timer;
-  final ScrollController _scroll = ScrollController();
-  bool _ended = false;
 
   @override
   void initState() {
     super.initState();
+    _remainingSeconds = _totalSeconds;
+    _startTimer();
+  }
 
-    // ✅ 세션 ID 기반 메시지 구독 시작
-    ref.read(chatMessagesProvider.notifier).start(widget.room.chatSessionId);
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_remainingSeconds <= 1) {
+        timer.cancel();
+        setState(() => _remainingSeconds = 0);
+        _onSessionEnd();
+      } else {
+        setState(() => _remainingSeconds--);
+      }
+    });
+  }
 
-    // 새 메시지 들어오면 하단으로 스크롤
-    ref.listen<List<ChatMessage>>(chatMessagesProvider, (prev, next) {
-      if (!mounted || next.isEmpty) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scroll.hasClients) {
-          _scroll.animateTo(
-            _scroll.position.maxScrollExtent + 80,
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-          );
-        }
+  void _onSessionEnd() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("⏰ 채팅 세션이 종료되었습니다.")),
+    );
+    Navigator.pop(context);
+  }
+
+  String _formatTime(int seconds) {
+    final minutes = seconds ~/ 60;
+    final secs = seconds % 60;
+    return "${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}";
+  }
+
+  void _sendMessage() {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+
+    setState(() {
+      _messages.add({
+        "sender": "me",
+        "content": text,
+        "time": TimeOfDay.now().format(context)
       });
     });
 
-    // 세션 타이머 시작
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
-      if (!mounted) return;
-      setState(() => _remain--);
-      if (_remain <= 0) {
-        timer.cancel();
-        await _handleSessionEnd();
-      }
+    _controller.clear();
+
+    // 자동 스크롤
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent + 60,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
     });
+
+    // TODO: 서버 전송
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    _scroll.dispose();
+    _controller.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleSessionEnd() async {
-    if (_ended) return;
-    _ended = true;
-
-    // ✅ 세션 종료 처리
-    await ref
-        .read(chatRepositoryProvider)
-        .closeSession(widget.room.chatSessionId);
-
-    if (!mounted) return;
-    // 10분이 지나면 자동으로 결과 화면으로 이동
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const AnalysisResultScreen()),
-    );
-  }
-
-  /// 채팅방 나가기 시도 시 호출 (뒤로가기 버튼만 처리)
-  Future<bool> _onWillPop() async {
-    if (_ended) return true; // 이미 종료된 상태면 그냥 나감
-
-    final shouldExit = await showDialog<bool>(
-      context: context,
-      builder: (_) => const EndChatDialog(),
-    );
-
-    if (shouldExit == true && mounted) {
-      // ✅ 사용자가 "예"를 누른 경우 → 세션 종료 + 결과 화면 이동
-      await ref
-          .read(chatRepositoryProvider)
-          .closeSession(widget.room.chatSessionId);
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AnalysisResultScreen()),
-      );
-      return true;
-    }
-    return false; // "아니오" → 채팅방 잔류
-  }
-
-  String _formatRemain(int sec) {
-    final m = (sec ~/ 60).toString().padLeft(2, '0');
-    final s = (sec % 60).toString().padLeft(2, '0');
-    return '$m:$s';
-  }
-
-  Future<void> _send(String content) async {
-    if (_ended) return;
-    await ref.read(chatRepositoryProvider).sendMessage(
-      chatSessionId: widget.room.chatSessionId,
-      senderId: widget.currentUserId,
-      content: content,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final messages = ref.watch(chatMessagesProvider);
-
-    return WillPopScope(
-      onWillPop: _onWillPop, // ← 뒤로가기 버튼 제어
-      child: Scaffold(
-        backgroundColor: const Color(0xFFFFF8FC),
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          titleSpacing: 0,
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                widget.room.chatSessionId,
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                '남은 시간 ${_formatRemain(_remain)}',
-                style:
-                const TextStyle(fontSize: 12, color: Colors.black54),
-              ),
-            ],
-          ),
-          iconTheme: const IconThemeData(color: Colors.black87),
-        ),
-        body: Column(
-          children: <Widget>[
-            Expanded(
-              child: messages.isEmpty
-                  ? const _EmptyState()
-                  : ListView.builder(
-                controller: _scroll,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: messages.length,
-                itemBuilder: (context, i) {
-                  final m = messages[i];
-                  final isMine = m.senderId == widget.currentUserId;
-                  return MessageBubble(message: m, isMine: isMine);
-                },
-              ),
+    return Scaffold(
+      backgroundColor: const Color(0xFFFDFDFD),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 1,
+        titleSpacing: 0,
+        title: Row(
+          children: [
+            const CircleAvatar(
+              radius: 18,
+              // backgroundImage: AssetImage("assets/images/default_profile.png"),
             ),
-            MessageInputBar(
-              onSend: (t) async => _send(t),
-              enabled: !_ended,
+            const SizedBox(width: 8),
+            const Text(
+              "여기에 주제",
+              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
             ),
           ],
         ),
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.redAccent.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              _formatTime(_remainingSeconds),
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.lightBlue,
+              ),
+            ),
+          ),
+        ],
       ),
-    );
-  }
-}
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(12),
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                final msg = _messages[index];
+                final isMe = msg["sender"] == "me";
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: const <Widget>[
-          Icon(Icons.chat_bubble_outline,
-              size: 48, color: Colors.black26),
-          SizedBox(height: 8),
-          Text('대화를 시작해 보세요',
-              style: TextStyle(color: Colors.black45)),
+                return Align(
+                  alignment:
+                  isMe ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 10, horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: isMe ? Colors.lightBlue : Colors.grey[200],
+                      borderRadius: BorderRadius.only(
+                        topLeft: const Radius.circular(16),
+                        topRight: const Radius.circular(16),
+                        bottomLeft: isMe
+                            ? const Radius.circular(16)
+                            : const Radius.circular(0),
+                        bottomRight: isMe
+                            ? const Radius.circular(0)
+                            : const Radius.circular(16),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          offset: const Offset(0, 1),
+                          blurRadius: 2,
+                        )
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          msg["content"] ?? "",
+                          style: TextStyle(
+                            color: isMe ? Colors.white : Colors.black87,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          msg["time"] ?? "",
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isMe ? Colors.white70 : Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            padding:
+            const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: Colors.grey, width: 0.2)),
+            ),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline,
+                      color: Colors.grey),
+                  onPressed: () {},
+                ),
+                Expanded(
+                  child: Container(
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: TextField(
+                      controller: _controller,
+                      minLines: 1,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        hintText: "메시지를 입력하세요...",
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.send, color: Colors.lightBlue),
+                  onPressed: _sendMessage,
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
