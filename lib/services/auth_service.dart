@@ -31,6 +31,19 @@ class AuthService {
     await _storage.delete(key: 'google_id_token');
   }
 
+  // Authorization 헤더 생성
+  static Future<Map<String, String>> buildAuthHeader() async {
+    final token = await getToken();
+    if (token != null) {
+      return {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+    } else {
+      return {'Content-Type': 'application/json'};
+    }
+  }
+
   // 전체 로그아웃 처리
   static Future<void> logout(BuildContext context) async {
     try {
@@ -42,7 +55,8 @@ class AuthService {
       await deleteGoogleIdToken();
 
       // 로그인 화면으로 이동 (기존 화면 제거)
-      Navigator.pushNamedAndRemoveUntil(context, '/main-screen', (route) => false);
+      Navigator.pushNamedAndRemoveUntil(
+          context, '/main-screen', (route) => false);
     } catch (e) {
       print('로그아웃 오류: $e');
     }

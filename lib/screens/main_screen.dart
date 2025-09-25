@@ -10,7 +10,7 @@ class MainScreen extends StatelessWidget {
     final size = MediaQuery.of(context).size;
 
     final logoHeight = size.height * 0.2;
-    final topPadding = size.height * 0.01;
+    final topPadding = size.height * 0.1;
 
     return Scaffold(
       body: Container(
@@ -46,7 +46,8 @@ class MainScreen extends StatelessWidget {
                     Text(
                       '하루 10분, 연인과 대화를 통해',
                       style: TextStyle(
-                        fontSize: 20,
+                        fontFamily: 'GowunBatang',
+                        fontSize: 23,
                         fontWeight: FontWeight.bold,
                         color: Colors.black87,
                       ),
@@ -56,7 +57,8 @@ class MainScreen extends StatelessWidget {
                     Text(
                       '오늘 하루 감정을 알아보다.',
                       style: TextStyle(
-                        fontSize: 20,
+                        fontFamily: 'GowunBatang',
+                        fontSize: 23,
                         fontWeight: FontWeight.bold,
                         color: Colors.black87,
                       ),

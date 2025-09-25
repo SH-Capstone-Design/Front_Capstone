@@ -1,3 +1,6 @@
+import 'package:connectbeat/screens/couple_code_screen.dart';
+import 'package:connectbeat/screens/emotion_result_screen.dart';
+import 'package:connectbeat/screens/main_screen.dart';
 import 'package:connectbeat/screens/splash_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';

@@ -11,56 +11,81 @@ class LoginScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
-    // 화면 세로 크기의 20%를 로고 높이로 설정
-    final logoHeight = size.height * 0.2;
-    // 위쪽 여백 (필요시 사용 가능)
-    final topPadding = size.height * 0.01;
+    final gifHeight = size.height * 0.2; // 로고 대신 GIF 높이
+    final topPadding = size.height * 0.1;
+    final buttonWidth = size.width * 0.55;
+    final buttonHeight = 55.0;
+    final elementSpacing = size.height * 0.02;
+    final textToButtonSpacing = size.height * 0.05;
 
     return Scaffold(
-        body: Container(
-          decoration: BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage(AppConstants.backgroundPath),
-              fit: BoxFit.cover,
-            ),
+      body: Container(
+        decoration: BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage(AppConstants.backgroundPath),
+            fit: BoxFit.cover,
           ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(height: topPadding),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(height: topPadding),
 
-                  SizedBox(
-                    height: logoHeight,
-                    child: Image.asset(
-                      AppConstants.logoPath,
-                      fit: BoxFit.contain,
+                // GIF 로고
+                SizedBox(
+                  height: gifHeight,
+                  child: Image.asset(
+                    'assets/images/HeartBeat.gif',
+                    fit: BoxFit.contain,
+                  ),
+                ),
+
+                Spacer(flex: 2),
+
+                // 텍스트
+                const Center(
+                  child: Text(
+                    '소셜 로그인으로 시작하기',
+                    style: TextStyle(
+                      fontFamily: 'GowunBatang',
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
                     ),
+                    textAlign: TextAlign.center,
                   ),
-                  // 로고와 버튼 사이 공간 (flex 비율로 동적 조절)
-                  const Spacer(flex: 1),
-                  // 카카오 로그인 버튼: 고정 높이 55
-                  LoginButton(
-                    imagePath: 'assets/images/kakao_login.png',
-                    height: 55,
-                    onPressed: () => signInWithKakao(context),
-                  ),
-                  const SizedBox(height: 16),
-                  LoginButton(
-                    imagePath: 'assets/images/google_login.png',
-                    height: 55,
-                    onPressed: () => signInWithGoogle(context),
-                  ),
-                  // 버튼 아래 공간 더 넉넉히 주기 (flex 2)
-                  const Spacer(flex: 2),
+                ),
 
-                ], // 나중에 Google 로그인 버튼 등 추가 가능
-              ),
+                SizedBox(height: textToButtonSpacing),
+
+                // 카카오 로그인 버튼
+                LoginButton(
+                  imagePath: 'assets/images/Kakao_login_button.png',
+                  width: buttonWidth,
+                  height: buttonHeight,
+                  onPressed: () => signInWithKakao(context),
+                ),
+
+                SizedBox(height: elementSpacing),
+
+                // 구글 로그인 버튼
+                LoginButton(
+                  imagePath: 'assets/images/Google_login_button.png',
+                  width: buttonWidth,
+                  height: buttonHeight,
+                  onPressed: () => signInWithGoogle(context),
+                ),
+
+                // 남는 공간 채우기
+                Spacer(flex: 3),
+              ],
             ),
           ),
         ),
+      ),
     );
   }
 }

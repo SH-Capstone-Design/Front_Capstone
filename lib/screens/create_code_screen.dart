@@ -30,8 +30,6 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
     });
 
     final token = await AuthService.getToken();
-    print('가져온 토큰: $token');
-
     if (token == null) {
       setState(() {
         _code = '토큰 없음';
@@ -50,8 +48,6 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
         body: jsonEncode({}),
       );
 
-      print('응답 상태 코드: ${response.statusCode}');
-
       if (response.statusCode == 200) {
         final decodedBody = utf8.decode(response.bodyBytes);
         final json = jsonDecode(decodedBody);
@@ -64,7 +60,12 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message ?? '코드가 생성되었습니다')),
+          SnackBar(
+            content: Text(
+              message ?? '코드가 생성되었습니다',
+              style: const TextStyle(fontFamily: 'GowunBatang'),
+            ),
+          ),
         );
       } else {
         setState(() {
@@ -73,18 +74,27 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('코드 생성 실패: ${response.body}')),
+          SnackBar(
+            content: Text(
+              '코드 생성 실패: ${response.body}',
+              style: const TextStyle(fontFamily: 'GowunBatang'),
+            ),
+          ),
         );
       }
     } catch (e) {
-      print('에러 발생: $e');
       setState(() {
         _code = '에러 발생';
         _isLoading = false;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('에러: $e')),
+        SnackBar(
+          content: Text(
+            '에러: $e',
+            style: const TextStyle(fontFamily: 'GowunBatang'),
+          ),
+        ),
       );
     }
   }
@@ -98,7 +108,7 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // 배경 이미지 적용
+          // 배경 이미지
           SizedBox.expand(
             child: Image.asset(
               AppConstants.backgroundPath,
@@ -139,6 +149,7 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
                           Text(
                             '코드 : $_code',
                             style: TextStyle(
+                              fontFamily: 'GowunBatang',
                               fontSize: screenHeight * 0.025,
                               fontWeight: FontWeight.w500,
                             ),
@@ -147,15 +158,24 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
                           GestureDetector(
                             onTap: () {
                               if (_code != null) {
-                                Clipboard.setData(ClipboardData(text: _code!));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('코드가 복사되었습니다!')),
+                                Clipboard.setData(
+                                    ClipboardData(text: _code!));
+                                ScaffoldMessenger.of(context)
+                                    .showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      '코드가 복사되었습니다!',
+                                      style: TextStyle(
+                                          fontFamily: 'GowunBatang'),
+                                    ),
+                                  ),
                                 );
                               }
                             },
                             child: Text(
                               '복사',
                               style: TextStyle(
+                                fontFamily: 'GowunBatang',
                                 fontSize: screenHeight * 0.022,
                                 color: Colors.blueAccent,
                                 fontWeight: FontWeight.bold,
