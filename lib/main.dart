@@ -1,3 +1,5 @@
+import 'package:connectbeat/models/chat_room.dart';
+import 'package:connectbeat/screens/chat_room_screen.dart';
 import 'package:connectbeat/screens/splash_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -39,6 +41,10 @@ class ConnectBeatApp extends StatelessWidget {
       ),
       // 초기 화면: Splash
       home: const SplashScreen(),
+      // home: ChatRoomScreen(
+      //   room: ChatRoom(chatSessionId: 'debug-session'), // 더미 세션
+      //   currentUserId: 'debug-user',
+      // ),
       onGenerateRoute: AppRouter.generateRoute, // AppRouter로 모든 라우트 처리
       navigatorObservers: [routeObserver],
     );
