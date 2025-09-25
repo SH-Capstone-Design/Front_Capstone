@@ -17,6 +17,7 @@ import 'package:connectbeat/screens/main_screen.dart';
 import 'package:connectbeat/screens/emotion_result_screen.dart';
 import 'package:connectbeat/screens/profile_setup_screen.dart';
 import 'package:connectbeat/screens/chat_room_screen.dart';
+import 'package:connectbeat/models/chat_room.dart';
 
 class AppRouter {
   static Route<dynamic> generateRoute(RouteSettings settings) {

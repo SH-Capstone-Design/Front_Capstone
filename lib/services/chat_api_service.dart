@@ -1,12 +1,17 @@
+// lib/services/chat_api_service.dart
 import 'dart:convert';
+import 'package:connectbeat/models/chat_room.dart';
+import 'package:connectbeat/models/chat_message.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:connectbeat/services/auth_service.dart';
-import 'package:connectbeat/services/chat_repository.dart';
 
+/// 채팅 REST API 호출 서비스
 class ChatApiService {
-  static const String _baseUrl = "http://13.125.197.173:8080/api/chat";
+  /// .env에 정의된 BASE_URL 사용
+  static final String _baseUrl = dotenv.env['BASE_URL'] ?? '';
 
-  /// 공통 헤더
+  /// 공통 헤더 (JWT 포함)
   Future<Map<String, String>> _headers() async {
     final token = await AuthService.getToken();
     return {
@@ -15,25 +20,25 @@ class ChatApiService {
     };
   }
 
-  /// 세션 시작: POST /api/chat/session/start
+  /// ✅ 채팅방 생성 (POST /api/chat/rooms)
   Future<ChatRoom> startSession() async {
     final headers = await _headers();
-    final url = Uri.parse("$_baseUrl/session/start");
-
+    final url = Uri.parse("$_baseUrl/chat/rooms");
+    print("📌 요청 헤더: $headers");
     final res = await http.post(url, headers: headers);
 
     if (res.statusCode == 200) {
-      final body = jsonDecode(res.body);
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
       return ChatRoom.fromJson(body);
     } else {
       throw Exception("세션 시작 실패: [${res.statusCode}] ${res.body}");
     }
   }
 
-  /// 세션 종료: POST /api/chat/session/end
+  /// ✅ 채팅방 종료 (POST /api/chat/rooms/end)
   Future<void> closeSession(String chatSessionId) async {
     final headers = await _headers();
-    final url = Uri.parse("$_baseUrl/session/end");
+    final url = Uri.parse("$_baseUrl/chat/rooms/end");
 
     final res = await http.post(
       url,
@@ -46,8 +51,8 @@ class ChatApiService {
     }
   }
 
-  /// 메시지 전송 (소켓 없는 경우 대체용)
-  Future<void> sendMessageRest({
+  /// ✅ 메시지 전송 (REST 대체용, 소켓 연결 안될 때만 사용)
+  Future<ChatMessage> sendMessageRest({
     required String chatSessionId,
     required String senderId,
     required String content,
@@ -65,7 +70,10 @@ class ChatApiService {
       }),
     );
 
-    if (res.statusCode != 200) {
+    if (res.statusCode == 200) {
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      return ChatMessage.fromJson(body);
+    } else {
       throw Exception("메시지 전송 실패: [${res.statusCode}] ${res.body}");
     }
   }
