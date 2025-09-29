@@ -1,4 +1,4 @@
-import 'package:connectbeat/screens/analysis_result_screen.dart';
+import 'package:connectbeat/screens/emotion_result_screen.dart';
 import 'package:flutter/material.dart';
 
 class EndChatDialog extends StatelessWidget {
@@ -18,7 +18,7 @@ class EndChatDialog extends StatelessWidget {
             // ✅ 바로 결과 화면으로 이동
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
-                builder: (_) => const AnalysisResultScreen(),
+                builder: (_) => const EmotionResultScreen(),
               ),
             );
           },

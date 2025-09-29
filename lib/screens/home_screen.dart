@@ -5,8 +5,10 @@ import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/providers/couple_date_provider.dart';
 import 'package:connectbeat/providers/user_provider.dart';
 import 'package:connectbeat/widgets/bottom_bar.dart';
+import 'package:connectbeat/widgets/rounded_button.dart';
 import 'myprofile_setting_screen.dart';
 import 'setting_screen.dart';
+import 'create_chat_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -130,6 +132,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
 
+              const SizedBox(height: 20),
+
+              // ✅ 오늘의 10분 대화 버튼 (RoundedButton 적용)
+              RoundedButton(
+                text: "오늘의 10분 대화 하러가기",
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const CreateChatScreen(),
+                    ),
+                  );
+                },
+              ),
+
               const Spacer(),
 
               // ✅ 캐릭터 깜빡임
@@ -152,24 +169,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       const SettingScreen(),
     ];
 
-    return Scaffold(
-      body: PageView(
-        controller: _pageController,
-        onPageChanged: (index) {
-          setState(() => _currentIndex = index);
-        },
-        children: screens,
-      ),
-      bottomNavigationBar: BottomBar(
-        currentIndex: _currentIndex,
-        onTap: (index) {
-          setState(() => _currentIndex = index);
-          _pageController.animateToPage(
-            index,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-          );
-        },
+    return WillPopScope(
+      onWillPop: () async {
+        // 뒤로가기 동작 막기
+        return false;
+      },
+      child: Scaffold(
+        body: PageView(
+          controller: _pageController,
+          onPageChanged: (index) {
+            setState(() => _currentIndex = index);
+          },
+          children: screens,
+        ),
+        bottomNavigationBar: BottomBar(
+          currentIndex: _currentIndex,
+          onTap: (index) {
+            setState(() => _currentIndex = index);
+            _pageController.animateToPage(
+              index,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            );
+          },
+        ),
       ),
     );
   }
