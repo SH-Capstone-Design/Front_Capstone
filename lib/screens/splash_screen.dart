@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/services/auth_service.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -26,14 +28,34 @@ class _SplashScreenState extends State<SplashScreen> {
     final prefs = await SharedPreferences.getInstance();
     final coupleCode = prefs.getString('coupleCode');
 
-    if (token != null && coupleCode != null) {
-      // 토큰 + 커플 등록 완료 → 홈 화면으로 이동
-      Navigator.pushReplacementNamed(context, '/home-screen');
-    } else {
-      // 로그인 안 됨 → 로그인 화면
-      Navigator.pushReplacementNamed(context, '/main-screen');
+    if (token != null) {
+      // 토큰 검증
+      final isValid = await _validateToken(token);
+      if (isValid && coupleCode != null) {
+        Navigator.pushReplacementNamed(context, '/home-screen');
+        return;
+      }
+    }
+
+    Navigator.pushReplacementNamed(context, '/main-screen');
+  }
+
+  Future<bool> _validateToken(String token) async {
+    try {
+      final headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+      final res = await http.get(
+        Uri.parse('${dotenv.env['BASE_URL']}/users/me'),
+        headers: headers,
+      );
+      return res.statusCode == 200;
+    } catch (e) {
+      return false;
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
