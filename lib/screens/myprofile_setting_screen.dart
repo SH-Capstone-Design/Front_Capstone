@@ -1,10 +1,17 @@
+// lib/screens/myprofile_setting_screen.dart
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
+import 'package:mime/mime.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import '../core/constants.dart';
 import '../providers/user_provider.dart';
 import '../widgets/rounded_button.dart';
+import '../services/auth_service.dart';
 
 class MyProfileSettingScreen extends ConsumerStatefulWidget {
   const MyProfileSettingScreen({super.key});
@@ -23,11 +30,10 @@ class _MyProfileSettingScreenState
   @override
   void initState() {
     super.initState();
-    final user = ref.read(userProvider);
-    _nicknameController =
-        TextEditingController(text: user?['nickname'] ?? '');
+    final userState = ref.read(userProvider);
+    final user = userState.value;
+    _nicknameController = TextEditingController(text: user?['nickname'] ?? '');
     _latestProfileUrl = user?['profileImage'];
-
     _fetchLatestKakaoProfile();
   }
 
@@ -44,8 +50,7 @@ class _MyProfileSettingScreenState
         final kakaoUser = await UserApi.instance.me();
         setState(() {
           _latestProfileUrl =
-              kakaoUser.kakaoAccount?.profile?.profileImageUrl ??
-                  _latestProfileUrl;
+              kakaoUser.kakaoAccount?.profile?.profileImageUrl ?? _latestProfileUrl;
         });
       }
     } catch (_) {}
@@ -60,6 +65,36 @@ class _MyProfileSettingScreenState
     }
   }
 
+  /// 🔹 S3 업로드
+  Future<String?> _uploadImage(File imageFile) async {
+    final token = await AuthService.getToken();
+    print('JWT Token: $token');
+    if (token == null) return null;
+
+    final uri = Uri.parse('${dotenv.env['BASE_URL']}/users/me/profile-image');
+    print('POST URL: ${dotenv.env['BASE_URL']}/users/me/profile-image');
+    final request = http.MultipartRequest('POST', uri);
+    request.headers['Authorization'] = 'Bearer $token';
+
+    final mimeType = lookupMimeType(imageFile.path)?.split('/') ?? ['image', 'jpeg'];
+
+    request.files.add(await http.MultipartFile.fromPath(
+      'image',
+      imageFile.path,
+      contentType: MediaType(mimeType[0], mimeType[1]),
+    ));
+
+    final response = await request.send();
+    final respStr = await response.stream.bytesToString();
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(respStr);
+      return data['profileImageUrl'];
+    } else {
+      throw Exception('업로드 실패: ${response.statusCode} $respStr');
+    }
+  }
+
   Future<void> _onSavePressed() async {
     final nickname = _nicknameController.text.trim();
     if (nickname.isEmpty) {
@@ -68,34 +103,46 @@ class _MyProfileSettingScreenState
       return;
     }
 
-    String? imageUrl;
-    if (_pickedImage != null) {
-      imageUrl = _pickedImage!.path;
-    } else if (_latestProfileUrl != null && _latestProfileUrl!.isNotEmpty) {
-      imageUrl = _latestProfileUrl;
-    }
-
     try {
+      String? imageUrl;
+      if (_pickedImage != null) {
+        imageUrl = await _uploadImage(_pickedImage!);
+      } else if (_latestProfileUrl != null && _latestProfileUrl!.isNotEmpty) {
+        imageUrl = _latestProfileUrl;
+      }
+
       await ref.read(userProvider.notifier).updateUser(
         nickname: nickname,
         profileImage: imageUrl,
       );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('프로필이 저장되었습니다.')),
-      );
-
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('프로필이 저장되었습니다.')));
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('업데이트 실패: $e')));
+      print(e);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final userState = ref.watch(userProvider);
 
+    if (userState.isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (userState.hasError) {
+      return Scaffold(
+        body: Center(child: Text('사용자 정보 불러오기 실패')),
+      );
+    }
+
+    final user = userState.value;
     ImageProvider? avatar;
     if (_pickedImage != null) {
       avatar = FileImage(_pickedImage!);
@@ -109,9 +156,9 @@ class _MyProfileSettingScreenState
           '내 프로필 설정',
           style: TextStyle(fontFamily: 'GowunBatang', color: Colors.black),
         ),
-        backgroundColor: Colors.transparent, // 투명
-        foregroundColor: Colors.black, // 뒤로가기 버튼 색상
-        elevation: 0, // 그림자 제거
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.black,
+        elevation: 0,
       ),
       body: Stack(
         children: [

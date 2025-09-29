@@ -2,8 +2,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'auth_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectbeat/providers/current_user_provider.dart';
 
 class ApiService {
@@ -25,7 +25,8 @@ class ApiService {
     );
 
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
+      // ✅ UTF-8로 디코딩
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
 
       // ✅ JWT 토큰 저장
       final token = data['token'];
@@ -65,7 +66,6 @@ class ApiService {
       if (token != null) 'Authorization': 'Bearer $token',
     };
 
-    // ✅ 디버그 로그
     print("🔗 POST $_baseUrl$endpoint");
     print("📦 Headers: $headers");
     if (body != null) print("📤 Body: $body");
@@ -98,5 +98,56 @@ class ApiService {
     );
 
     return response;
+  }
+
+  /// 👤 현재 로그인한 사용자 정보 가져오기
+  static Future<Map<String, dynamic>?> fetchUserInfo() async {
+    final token = await AuthService.getToken();
+    print("🛠 Debug: JWT token = $token");
+
+    final response = await getWithAuth('/users/me');
+    print("🛠 Debug: Response code = ${response.statusCode}");
+    print("🛠 Debug: Response body = ${response.body}");
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+      print("👤 User info: $data");
+      return data;
+    } else {
+      print("❌ Failed to fetch user info: ${response.statusCode}, ${response.body}");
+      return null;
+    }
+  }
+
+  /// 👤 사용자 정보 업데이트
+  static Future<Map<String, dynamic>?> updateUserInfo({
+    required String nickname,
+    String? profileImage,
+  }) async {
+    final body = {
+      'nickname': nickname,
+      if (profileImage != null) 'profileImage': profileImage,
+    };
+
+    final response = await putWithAuth('/users/me', body: body);
+
+    if (response.statusCode == 200) {
+      if (response.body.isEmpty) {
+        print("✅ User updated (empty response)");
+        return null; // 서버가 아무 것도 안 보내면 null 반환
+      }
+
+      try {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        print("✅ User updated: $data");
+        return data;
+      } catch (e) {
+        print("⚠️ Failed to parse response: $e");
+        return null;
+      }
+    } else {
+      print("❌ Failed to update user: ${response.statusCode}, ${response.body}");
+      return null;
+    }
   }
 }

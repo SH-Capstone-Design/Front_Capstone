@@ -8,7 +8,7 @@ import '../widgets/rounded_button.dart';
 
 class ProfileSetupScreen extends ConsumerStatefulWidget {
   final String nickname;
-  final String? profileImageUrl; // 카톡/구글에서 가져온 초기 URL
+  final String? profileImageUrl;
 
   const ProfileSetupScreen({
     super.key,
@@ -39,7 +39,6 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     super.dispose();
   }
 
-  // 카카오 프로필 가져오기 (없으면 구글 URL 사용)
   Future<void> _fetchLatestProfile() async {
     try {
       final hasKakaoToken = await AuthApi.instance.hasToken();
@@ -50,16 +49,13 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         });
         return;
       }
-    } catch (e) {
-      print('카카오 프로필 가져오기 실패: $e');
-    }
+    } catch (_) {}
 
     setState(() {
       _latestProfileUrl = widget.profileImageUrl;
     });
   }
 
-  // 갤러리에서 이미지 선택
   Future<void> _pickImage() async {
     final file = await ref.read(userProvider.notifier).pickImageFromGallery();
     if (file != null) {
@@ -69,7 +65,6 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     }
   }
 
-  // 저장/커플 연결 버튼
   Future<void> _onContinuePressed() async {
     final nickname = _nicknameController.text.trim();
     if (nickname.isEmpty) {
@@ -80,7 +75,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
 
     String? imageUrl;
     if (_pickedImage != null) {
-      imageUrl = _pickedImage!.path; // 서버 업로드 후 URL로 변경 필요
+      imageUrl = _pickedImage!.path; // 실제 서버 업로드 후 URL로 교체 필요
     } else if (_latestProfileUrl != null && _latestProfileUrl!.isNotEmpty) {
       imageUrl = _latestProfileUrl;
     }
