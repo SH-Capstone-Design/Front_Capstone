@@ -3,7 +3,6 @@
 
 import 'package:connectbeat/models/chat_message.dart';
 import 'package:flutter/material.dart';
-import 'package:connectbeat/services/chat_repository.dart'; // ChatMessage 모델 참조
 
 class MessageBubble extends StatelessWidget {
   const MessageBubble({
@@ -64,7 +63,7 @@ class MessageBubble extends StatelessWidget {
                       horizontal: 14,
                     ),
                     child: Text(
-                      message.content, // ✅ text → content
+                      message.content,
                       style: TextStyle(color: textColor, fontSize: 16),
                     ),
                   ),
@@ -76,7 +75,7 @@ class MessageBubble extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                _formatTime(message.createdAt),
+                _formatTime(DateTime.now()), // ✅ 서버에서 시간 안주므로 임시 처리
                 style: const TextStyle(fontSize: 11, color: Colors.black45),
               ),
             ),
