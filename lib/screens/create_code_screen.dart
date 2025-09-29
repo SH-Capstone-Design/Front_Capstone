@@ -6,7 +6,7 @@ import 'package:connectbeat/core/constants.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:connectbeat/services/auth_service.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:connectbeat/services/code_websocket_service.dart';
 
 class CreateCodeScreen extends ConsumerStatefulWidget {
   const CreateCodeScreen({super.key});
@@ -19,8 +19,6 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
   String? _code;
   bool _isLoading = true;
 
-  WebSocketChannel? _channel;
-
   @override
   void initState() {
     super.initState();
@@ -29,15 +27,13 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
 
   @override
   void dispose() {
-    _channel?.sink.close();
+    CodeWebsocketService.disconnect();
     super.dispose();
   }
 
   /// 1️⃣ 커플 코드 생성
   Future<void> _fetchCoupleCode() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     final token = await AuthService.getToken();
     if (token == null) {
@@ -49,8 +45,15 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
     }
 
     try {
+      final baseUrl = dotenv.env['BASE_URL'];
+      print("🔹 BASE_URL = $baseUrl"); // 디버그용
+
+      if (baseUrl == null || (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://'))) {
+        throw Exception("BASE_URL이 null이거나 http/https로 시작하지 않습니다.");
+      }
+
       final response = await http.post(
-        Uri.parse('${dotenv.env['BASE_URL']}/couples/code'),
+        Uri.parse('$baseUrl/couples/code'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -58,11 +61,14 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
         body: jsonEncode({}),
       );
 
+      print("🛠 Response status: ${response.statusCode}");
+      print("🛠 Response body: ${response.body}");
+
       if (response.statusCode == 200) {
         final decodedBody = utf8.decode(response.bodyBytes);
-        final json = jsonDecode(decodedBody);
-        final code = json['code'];
-        final message = json['message'];
+        final jsonBody = jsonDecode(decodedBody);
+        final code = jsonBody['code'];
+        final message = jsonBody['message'];
 
         setState(() {
           _code = code;
@@ -79,9 +85,10 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
         );
 
         // 코드 생성 후 WebSocket 연결
-        final userId = await AuthService.getUserId(); // AuthService에서 userId 반환
+        final userId = await AuthService.getUserId();
         if (userId != null) {
-          _connectWebSocket(userId);
+          print("🔗 Connecting WebSocket for userId: $userId");
+          CodeWebsocketService.connect(userId, token, context);
         }
       } else {
         setState(() {
@@ -98,11 +105,14 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, st) {
       setState(() {
         _code = '에러 발생';
         _isLoading = false;
       });
+
+      print("❌ _fetchCoupleCode 에러 발생: $e");
+      print(st); // 스택트레이스 출력
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -115,35 +125,6 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
     }
   }
 
-  /// 2️⃣ WebSocket 연결
-  void _connectWebSocket(String userId) {
-    // 서버에서 제공하는 WebSocket URL에 userId 쿼리 포함
-    _channel = WebSocketChannel.connect(
-      Uri.parse('${dotenv.env['BASE_WS_URL']}/user/$userId/queue/events'),
-    );
-
-    _channel!.stream.listen((message) {
-      final event = jsonDecode(message);
-
-      if (event['eventType'] == 'COUPLE_CONNECTED') {
-        // 커플 연결 완료 이벤트 수신 시 자동 화면 이동
-        Navigator.pushReplacementNamed(context, '/home-screen');
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              event['payload']?['message'] ??
-                  '커플 연결이 성공적으로 완료되었습니다!',
-              style: const TextStyle(fontFamily: 'GowunBatang'),
-            ),
-          ),
-        );
-      }
-    }, onError: (error) {
-      print('WebSocket error: $error');
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
@@ -153,7 +134,6 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // 배경 이미지
           SizedBox.expand(
             child: Image.asset(
               AppConstants.backgroundPath,
