@@ -96,9 +96,9 @@ class CoupleManageScreen extends StatelessWidget {
         title: const Text(
           '커플 관리',
           style: TextStyle(
-            fontFamily: 'GowunBatang',
-            fontSize: titleFontSize,
-            color: Colors.black
+              fontFamily: 'GowunBatang',
+              fontSize: titleFontSize,
+              color: Colors.black
           ),
         ),
         backgroundColor: Colors.transparent,

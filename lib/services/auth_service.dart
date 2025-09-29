@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
+import 'dart:convert';
 
 class AuthService {
   static final _storage = FlutterSecureStorage();
 
-  // JWT 토큰 저장/조회/삭제
+  // 🔹 JWT 토큰 저장/조회/삭제
   static Future<void> saveToken(String token) async {
     await _storage.write(key: 'jwt_token', value: token);
   }
@@ -18,7 +19,7 @@ class AuthService {
     await _storage.delete(key: 'jwt_token');
   }
 
-  // Google ID 토큰 저장/조회/삭제
+  // 🔹 Google ID 토큰 저장/조회/삭제
   static Future<void> saveGoogleIdToken(String idToken) async {
     await _storage.write(key: 'google_id_token', value: idToken);
   }
@@ -31,7 +32,7 @@ class AuthService {
     await _storage.delete(key: 'google_id_token');
   }
 
-  // Authorization 헤더 생성
+  // 🔹 Authorization 헤더 생성
   static Future<Map<String, String>> buildAuthHeader() async {
     final token = await getToken();
     if (token != null) {
@@ -44,7 +45,7 @@ class AuthService {
     }
   }
 
-  // 전체 로그아웃 처리
+  // 🔹 전체 로그아웃 처리
   static Future<void> logout(BuildContext context) async {
     try {
       // 카카오 로그아웃
@@ -59,6 +60,27 @@ class AuthService {
           context, '/main-screen', (route) => false);
     } catch (e) {
       print('로그아웃 오류: $e');
+    }
+  }
+
+  // 🔹 JWT에서 userId 추출 (WebSocket용)
+  static Future<String?> getUserId() async {
+    final token = await getToken();
+    if (token == null) return null;
+
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+
+      final payload = parts[1];
+      final normalized = base64Url.normalize(payload);
+      final decoded = utf8.decode(base64Url.decode(normalized));
+      final Map<String, dynamic> jsonPayload = jsonDecode(decoded);
+
+      return jsonPayload['sub'] as String?; // 서버 JWT의 sub 필드가 userId라고 가정
+    } catch (e) {
+      print('JWT 디코딩 오류: $e');
+      return null;
     }
   }
 }

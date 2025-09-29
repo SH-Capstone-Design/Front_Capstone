@@ -1,11 +1,12 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:connectbeat/core/constants.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:connectbeat/services/auth_service.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 class CreateCodeScreen extends ConsumerStatefulWidget {
   const CreateCodeScreen({super.key});
@@ -18,12 +19,21 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
   String? _code;
   bool _isLoading = true;
 
+  WebSocketChannel? _channel;
+
   @override
   void initState() {
     super.initState();
     _fetchCoupleCode();
   }
 
+  @override
+  void dispose() {
+    _channel?.sink.close();
+    super.dispose();
+  }
+
+  /// 1️⃣ 커플 코드 생성
   Future<void> _fetchCoupleCode() async {
     setState(() {
       _isLoading = true;
@@ -67,6 +77,12 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
             ),
           ),
         );
+
+        // 코드 생성 후 WebSocket 연결
+        final userId = await AuthService.getUserId(); // AuthService에서 userId 반환
+        if (userId != null) {
+          _connectWebSocket(userId);
+        }
       } else {
         setState(() {
           _code = '생성 실패';
@@ -97,6 +113,35 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
         ),
       );
     }
+  }
+
+  /// 2️⃣ WebSocket 연결
+  void _connectWebSocket(String userId) {
+    // 서버에서 제공하는 WebSocket URL에 userId 쿼리 포함
+    _channel = WebSocketChannel.connect(
+      Uri.parse('${dotenv.env['BASE_WS_URL']}/user/$userId/queue/events'),
+    );
+
+    _channel!.stream.listen((message) {
+      final event = jsonDecode(message);
+
+      if (event['eventType'] == 'COUPLE_CONNECTED') {
+        // 커플 연결 완료 이벤트 수신 시 자동 화면 이동
+        Navigator.pushReplacementNamed(context, '/home-screen');
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              event['payload']?['message'] ??
+                  '커플 연결이 성공적으로 완료되었습니다!',
+              style: const TextStyle(fontFamily: 'GowunBatang'),
+            ),
+          ),
+        );
+      }
+    }, onError: (error) {
+      print('WebSocket error: $error');
+    });
   }
 
   @override
