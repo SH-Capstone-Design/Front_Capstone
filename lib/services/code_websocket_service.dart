@@ -8,8 +8,9 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 class CodeWebsocketService {
   static StompClient? _stompClient;
 
-  static void connect(String userId, String token, BuildContext context) {
-    final wsUrl = dotenv.env['BASE_WS_URL']!; // ws:// 또는 wss://
+  /// STOMP(WebSocket) 연결
+  static Future<void> connect(String userId, String token, BuildContext context) async {
+    final wsUrl = dotenv.env['BASE_WS_URL']!;
     print("🔗 Connecting to WebSocket: $wsUrl");
 
     _stompClient = StompClient(
@@ -18,39 +19,43 @@ class CodeWebsocketService {
         onConnect: (StompFrame frame) {
           print("✅ STOMP Connected");
 
+          // 사용자별 이벤트 구독 (userId 포함)
           _stompClient?.subscribe(
             destination: "/user/$userId/queue/events",
-            callback: (frame) {
+            callback: (StompFrame frame) {
+              print("📩 Received frame: ${frame.body}");
               if (frame.body != null) {
                 final event = jsonDecode(frame.body!);
-                print("📩 Event received: $event");
-
                 if (event['eventType'] == 'COUPLE_CONNECTED') {
                   Navigator.pushReplacementNamed(context, '/home-screen');
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        event['payload']?['message'] ??
-                            '커플 연결이 성공적으로 완료되었습니다!',
-                        style: const TextStyle(fontFamily: 'GowunBatang'),
-                      ),
-                    ),
+                    SnackBar(content: Text(event['payload']?['message'] ?? '커플 연결 성공!')),
                   );
                 }
               }
             },
           );
+
+          print("📌 Subscribed to /user/$userId/queue/events");
         },
-        onWebSocketError: (error) => print("❌ WebSocket error: $error"),
-        onStompError: (frame) => print("❌ STOMP error: ${frame.body}"),
+        onWebSocketError: (dynamic error) => print("❌ WebSocket error: $error"),
+        onStompError: (StompFrame frame) => print("❌ STOMP error: ${frame.body}"),
         onDisconnect: (frame) => print("⚡ WebSocket disconnected"),
-        stompConnectHeaders: {'Authorization': 'Bearer $token'},
+        stompConnectHeaders: {
+          'Authorization': 'Bearer $token',
+        },
+        webSocketConnectHeaders: {
+          'Authorization': 'Bearer $token',
+        },
+        heartbeatIncoming: Duration(milliseconds: 0),
+        heartbeatOutgoing: Duration(milliseconds: 20000),
       ),
     );
 
     _stompClient?.activate();
   }
 
+  /// WebSocket 연결 해제
   static void disconnect() {
     _stompClient?.deactivate();
     _stompClient = null;
