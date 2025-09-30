@@ -1,17 +1,17 @@
 // lib/services/chat_repository_impl.dart
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:connectbeat/models/chat_room.dart';
 import 'package:connectbeat/models/chat_message.dart';
-import 'package:connectbeat/models/chat_room_event.dart'; // 새로 정의 필요
+import 'package:connectbeat/models/chat_room_event.dart';
 import 'package:connectbeat/services/chat_repository.dart';
 import 'package:connectbeat/services/chat_api_service.dart';
 
 /// 소켓 추상화 인터페이스
 abstract class ChatSocketPort {
   /// 서버와 연결 (WebSocket/STOMP 등)
-  Future<void> connect({required void Function(Map<String, dynamic>) onMessage});
+  Future<void> connect({
+    required void Function(Map<String, dynamic>) onMessage,
+  });
 
   /// 특정 채팅방 구독
   void subscribeChatRoom(
@@ -19,7 +19,7 @@ abstract class ChatSocketPort {
       void Function(Map<String, dynamic>) onMessage,
       );
 
-  /// 메시지 전송
+  /// 메시지 전송 (STOMP → /app/chat/message)
   void sendMessage({
     required String chatSessionId,
     required String senderId,
@@ -50,6 +50,8 @@ class ChatRepositoryImpl implements ChatRepository {
     return await api.startSession();
   }
 
+
+
   /// ✅ 일반 메시지 스트림 구독
   @override
   Stream<ChatMessage> subscribeMessages(String chatSessionId) {
@@ -57,20 +59,19 @@ class ChatRepositoryImpl implements ChatRepository {
 
     socket.subscribeChatRoom(chatSessionId, (data) {
       try {
-        // 메시지일 수도 있고 이벤트일 수도 있음 → 분기 처리
         if (data.containsKey("senderId") && data.containsKey("content")) {
           final msg = ChatMessage.fromJson(data);
           _messageController.add(msg);
         }
-      } catch (_) {
-        // 무시 (로그 필요 시 추가)
+      } catch (e) {
+        print("⚠️ 메시지 파싱 실패: $e");
       }
     });
 
     return _messageController.stream;
   }
 
-  /// ✅ 이벤트 스트림 구독 (USER_JOINED, CONVERSATION_ENDED 등)
+  /// ✅ 이벤트 스트림 구독 (INVITATION, USER_JOINED, CONVERSATION_STARTED, CONVERSATION_ENDED, ERROR 등)
   Stream<ChatRoomEvent> subscribeEvents(String chatSessionId) {
     _ensureSocketConnection();
 
@@ -80,15 +81,15 @@ class ChatRepositoryImpl implements ChatRepository {
           final event = ChatRoomEvent.fromJson(data);
           _eventController.add(event);
         }
-      } catch (_) {
-        // 무시
+      } catch (e) {
+        print("⚠️ 이벤트 파싱 실패: $e");
       }
     });
 
     return _eventController.stream;
   }
 
-  /// ✅ 메시지 전송 (STOMP publish → /app/chat/message)
+  /// ✅ 메시지 전송 (WebSocket)
   @override
   Future<void> sendMessage({
     required String chatSessionId,
@@ -109,24 +110,28 @@ class ChatRepositoryImpl implements ChatRepository {
 
     socket.disconnect();
 
+    // StreamController 안전 종료
     await _messageController.close();
     await _eventController.close();
   }
 
-  /// 내부: 소켓 연결 보장
+  /// 내부: 소켓 연결 보장 (중복 connect 방지)
   void _ensureSocketConnection() {
+    if (_messageController.isClosed || _eventController.isClosed) {
+      throw Exception("❌ StreamController가 이미 닫혀 있습니다.");
+    }
+
     socket.connect(onMessage: (data) {
-      // 기본 onMessage에서 이벤트/메시지 분류
-      if (data.containsKey("eventType")) {
-        try {
+      try {
+        if (data.containsKey("eventType")) {
           final event = ChatRoomEvent.fromJson(data);
           _eventController.add(event);
-        } catch (_) {}
-      } else if (data.containsKey("senderId") && data.containsKey("content")) {
-        try {
+        } else if (data.containsKey("senderId") && data.containsKey("content")) {
           final msg = ChatMessage.fromJson(data);
           _messageController.add(msg);
-        } catch (_) {}
+        }
+      } catch (e) {
+        print("⚠️ WebSocket 메시지 처리 실패: $e");
       }
     });
   }

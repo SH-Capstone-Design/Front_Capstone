@@ -1,28 +1,27 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
-import 'package:connectbeat/core/constants.dart';
-import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:connectbeat/services/auth_service.dart';
 import 'package:connectbeat/services/code_websocket_service.dart';
+import 'package:http/http.dart' as http;
+import 'package:connectbeat/core/constants.dart';
 
-class CreateCodeScreen extends ConsumerStatefulWidget {
+class CreateCodeScreen extends StatefulWidget {
   const CreateCodeScreen({super.key});
 
   @override
-  ConsumerState<CreateCodeScreen> createState() => _CreateCodeScreenState();
+  State<CreateCodeScreen> createState() => _CreateCodeScreenState();
 }
 
-class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
+class _CreateCodeScreenState extends State<CreateCodeScreen> {
   String? _code;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchCoupleCode();
+    _initializeWebSocketAndFetchCode();
   }
 
   @override
@@ -31,27 +30,30 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
     super.dispose();
   }
 
-  /// 1️⃣ 커플 코드 생성
-  Future<void> _fetchCoupleCode() async {
-    setState(() => _isLoading = true);
-
+  Future<void> _initializeWebSocketAndFetchCode() async {
     final token = await AuthService.getToken();
-    if (token == null) {
+    final userId = await AuthService.getUserId();
+
+    if (token == null || userId == null) {
       setState(() {
-        _code = '토큰 없음';
+        _code = '토큰 또는 사용자 ID 없음';
         _isLoading = false;
       });
       return;
     }
 
+    // 1️⃣ WebSocket 연결
+    await CodeWebsocketService.connect(userId, token, context);
+
+    // 2️⃣ 커플 코드 생성
+    _fetchCoupleCode(token);
+  }
+
+  Future<void> _fetchCoupleCode(String token) async {
+    setState(() => _isLoading = true);
+
     try {
-      final baseUrl = dotenv.env['BASE_URL'];
-      print("🔹 BASE_URL = $baseUrl"); // 디버그용
-
-      if (baseUrl == null || (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://'))) {
-        throw Exception("BASE_URL이 null이거나 http/https로 시작하지 않습니다.");
-      }
-
+      final baseUrl = dotenv.env['BASE_URL']!;
       final response = await http.post(
         Uri.parse('$baseUrl/couples/code'),
         headers: {
@@ -68,60 +70,23 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
         final decodedBody = utf8.decode(response.bodyBytes);
         final jsonBody = jsonDecode(decodedBody);
         final code = jsonBody['code'];
-        final message = jsonBody['message'];
 
         setState(() {
           _code = code;
           _isLoading = false;
         });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              message ?? '코드가 생성되었습니다',
-              style: const TextStyle(fontFamily: 'GowunBatang'),
-            ),
-          ),
-        );
-
-        // 코드 생성 후 WebSocket 연결
-        final userId = await AuthService.getUserId();
-        if (userId != null) {
-          print("🔗 Connecting WebSocket for userId: $userId");
-          CodeWebsocketService.connect(userId, token, context);
-        }
       } else {
         setState(() {
           _code = '생성 실패';
           _isLoading = false;
         });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '코드 생성 실패: ${response.body}',
-              style: const TextStyle(fontFamily: 'GowunBatang'),
-            ),
-          ),
-        );
       }
-    } catch (e, st) {
+    } catch (e) {
       setState(() {
         _code = '에러 발생';
         _isLoading = false;
       });
-
-      print("❌ _fetchCoupleCode 에러 발생: $e");
-      print(st); // 스택트레이스 출력
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '에러: $e',
-            style: const TextStyle(fontFamily: 'GowunBatang'),
-          ),
-        ),
-      );
+      print("❌ _fetchCoupleCode 에러: $e");
     }
   }
 
@@ -183,16 +148,13 @@ class _CreateCodeScreenState extends ConsumerState<CreateCodeScreen> {
                           GestureDetector(
                             onTap: () {
                               if (_code != null) {
-                                Clipboard.setData(
-                                    ClipboardData(text: _code!));
+                                Clipboard.setData(ClipboardData(text: _code!));
                                 ScaffoldMessenger.of(context)
                                     .showSnackBar(
                                   const SnackBar(
-                                    content: Text(
-                                      '코드가 복사되었습니다!',
-                                      style: TextStyle(
-                                          fontFamily: 'GowunBatang'),
-                                    ),
+                                    content: Text('코드가 복사되었습니다!',
+                                        style: TextStyle(
+                                            fontFamily: 'GowunBatang')),
                                   ),
                                 );
                               }

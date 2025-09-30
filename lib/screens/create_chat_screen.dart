@@ -97,7 +97,7 @@ class CreateChatScreen extends ConsumerWidget {
                         '/chat',
                         arguments: {
                           'room': room,
-                          'currentUserId': userId,
+                          'currentUserId': userId ?? "unknown", // ✅ null 방어
                         },
                       );
                     }
