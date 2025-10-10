@@ -1,3 +1,4 @@
+import 'package:connectbeat/screens/topic_select_screen.dart';
 import 'package:flutter/material.dart';
 
 // 화면 import
@@ -38,8 +39,16 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const SettingScreen());
       case '/create-chat':
         return MaterialPageRoute(builder: (_) => const CreateChatScreen());
-      case '/invite-partner':
-        return MaterialPageRoute(builder: (_) => const InvitePartnerScreen());
+
+      // case '/invite-partner':
+      //   final args = settings.arguments as Map<String, dynamic>;
+      //   return MaterialPageRoute(
+      //     builder: (_) => InvitePartnerScreen(
+      //       chatSessionId: args['chatSessionId'],
+      //       inviteeId: args['inviteeId'],
+      //     ),
+      //   );
+
       case '/couple-manage':
         return MaterialPageRoute(builder: (_) => const CoupleManageScreen());
       case '/myprofile-setting':
@@ -50,6 +59,8 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const MainScreen());
       case '/emotion-result':
         return MaterialPageRoute(builder: (_) => const EmotionResultScreen());
+      // case '/topic-select':
+      //   return MaterialPageRoute(builder: (_) => const TopicSelectScreen());
 
     // ✅ 채팅방 화면 라우트
       case '/chat':

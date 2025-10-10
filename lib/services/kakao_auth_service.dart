@@ -99,6 +99,7 @@ Future<void> _checkCoupleConnection(BuildContext context, Map<String, dynamic> u
 
 /// 메인 카카오 로그인 함수
 Future<void> signInWithKakao(BuildContext context) async {
+  print("✅ signInWithKakao() 호출됨");
   if (await AuthApi.instance.hasToken()) {
     try {
       AccessTokenInfo tokenInfo = await UserApi.instance.accessTokenInfo();
@@ -111,6 +112,7 @@ Future<void> signInWithKakao(BuildContext context) async {
         idToken: null,
         accessToken: token.accessToken,
       );
+      print("✅ 로그인 완료. accessToken: ${token.accessToken}");
 
       if (userInfo != null) {
         await _checkCoupleConnection(context, userInfo);
@@ -131,6 +133,7 @@ Future<void> signInWithKakao(BuildContext context) async {
 
 /// 카카오톡으로 로그인 시도
 Future<void> loginWithKakaoAccount(BuildContext context) async {
+  print("🔥 _loginWithKakaoAccountFallback 진입");
   if (await isKakaoTalkInstalled()) {
     try {
       OAuthToken token = await UserApi.instance.loginWithKakaoTalk();
