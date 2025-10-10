@@ -1,3 +1,4 @@
+// lib/screens/profile_setup_screen.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,8 +18,7 @@ class ProfileSetupScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<ProfileSetupScreen> createState() =>
-      _ProfileSetupScreenState();
+  ConsumerState<ProfileSetupScreen> createState() => _ProfileSetupScreenState();
 }
 
 class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
@@ -39,23 +39,27 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     super.dispose();
   }
 
+  /// 카카오 프로필 또는 전달받은 프로필 이미지 불러오기
   Future<void> _fetchLatestProfile() async {
     try {
       final hasKakaoToken = await AuthApi.instance.hasToken();
       if (hasKakaoToken) {
         final user = await UserApi.instance.me();
         setState(() {
-          _latestProfileUrl = user.kakaoAccount?.profile?.profileImageUrl;
+          _latestProfileUrl =
+              user.kakaoAccount?.profile?.profileImageUrl ??
+                  widget.profileImageUrl;
         });
         return;
       }
-    } catch (_) {}
-
-    setState(() {
-      _latestProfileUrl = widget.profileImageUrl;
-    });
+    } catch (_) {
+      setState(() {
+        _latestProfileUrl = widget.profileImageUrl;
+      });
+    }
   }
 
+  /// 갤러리에서 이미지 선택
   Future<void> _pickImage() async {
     final file = await ref.read(userProvider.notifier).pickImageFromGallery();
     if (file != null) {
@@ -65,6 +69,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     }
   }
 
+  /// 저장 후 커플 코드 화면 이동
   Future<void> _onContinuePressed() async {
     final nickname = _nicknameController.text.trim();
     if (nickname.isEmpty) {
@@ -73,19 +78,28 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
       return;
     }
 
-    String? imageUrl;
-    if (_pickedImage != null) {
-      imageUrl = _pickedImage!.path; // 실제 서버 업로드 후 URL로 교체 필요
-    } else if (_latestProfileUrl != null && _latestProfileUrl!.isNotEmpty) {
-      imageUrl = _latestProfileUrl;
-    }
-
     try {
-      await ref.read(userProvider.notifier).updateUser(
-        nickname: nickname,
-        profileImage: imageUrl,
-      );
-      Navigator.pushNamed(context, '/couple-code');
+      String? imageUrl;
+
+      // 1️⃣ 이미지가 새로 선택된 경우 업로드
+      if (_pickedImage != null) {
+        imageUrl =
+        await ref.read(userProvider.notifier).uploadProfileImage(_pickedImage!);
+        setState(() {
+          _latestProfileUrl = imageUrl;
+          _pickedImage = null;
+        });
+      }
+
+      // 2️⃣ 닉네임 업데이트
+      await ref.read(userProvider.notifier).updateNickname(nickname);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('프로필이 저장되었습니다.')),
+        );
+        Navigator.pushNamed(context, '/couple-code');
+      }
     } catch (e) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('업데이트 실패: $e')));
@@ -96,7 +110,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final logoHeight = size.height * 0.2;
-    final topPadding = size.height * 0.01;
+    final topPadding = size.height * 0.02;
 
     ImageProvider? avatar;
     if (_pickedImage != null) {
@@ -120,7 +134,6 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                 padding: EdgeInsets.symmetric(horizontal: size.width * 0.06),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     SizedBox(height: topPadding),
                     SizedBox(
@@ -139,8 +152,11 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                           backgroundColor: Colors.grey[200],
                           backgroundImage: avatar,
                           child: avatar == null
-                              ? const Icon(Icons.person,
-                              size: 60, color: Colors.grey)
+                              ? const Icon(
+                            Icons.person,
+                            size: 60,
+                            color: Colors.grey,
+                          )
                               : null,
                         ),
                       ),

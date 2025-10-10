@@ -16,6 +16,8 @@
   <string>connectbeat</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>프로필 사진 업로드를 위해 갤러리 접근이 필요합니다.</string>
   <key>CFBundleShortVersionString</key>
   <string>$(FLUTTER_BUILD_NAME)</string>
   <key>CFBundleSignature</key>

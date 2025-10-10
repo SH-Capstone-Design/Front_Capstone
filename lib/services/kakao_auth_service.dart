@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:flutter/services.dart';
 import 'package:logging/logging.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_service.dart';
 
 final Logger _logger = Logger('Kakao Login');
@@ -13,28 +12,22 @@ final Logger _logger = Logger('Kakao Login');
 final String baseUrl = dotenv.env['BASE_URL']!;
 final String loginUrl = '$baseUrl/users/login';
 
-/// 카카오 로그인 후 백엔드 로그인 및 토큰 저장
+/// 카카오 로그인 후 백엔드 로그인 및 JWT 저장
 Future<Map<String, dynamic>?> _getUserInfo({
   required String accessToken,
-  String? idToken,
 }) async {
   try {
     User user = await UserApi.instance.me();
 
-    // 카톡에서 가져온 정보
     final kakaoNickname = user.kakaoAccount?.profile?.nickname ?? '';
     final kakaoProfileImageUrl = user.kakaoAccount?.profile?.profileImageUrl;
 
-    // 로그 출력
-    _logger.info('카카오톡 프로필 정보 - 닉네임: $kakaoNickname, 프로필 이미지: $kakaoProfileImageUrl');
-    print('카카오톡 프로필 정보 - 닉네임: $kakaoNickname, 프로필 이미지: $kakaoProfileImageUrl');
+    _logger.info('카카오톡 프로필 - 닉네임: $kakaoNickname, 이미지: $kakaoProfileImageUrl');
 
-    final Map<String, dynamic> payload = {
+    final payload = {
       'provider': 'kakao',
       'accessToken': accessToken,
     };
-
-    _logger.info('사용자 정보 추출 성공: $payload');
 
     final response = await http.post(
       Uri.parse(loginUrl),
@@ -45,23 +38,14 @@ Future<Map<String, dynamic>?> _getUserInfo({
     if (response.statusCode == 200) {
       final resBody = jsonDecode(utf8.decode(response.bodyBytes));
 
-      _logger.info('백엔드 로그인 성공: $resBody');
-
       final token = resBody['token'];
       final userId = resBody['userId'];
       final nicknameFromBackend = resBody['nickname'];
       final profileImageFromBackend = resBody['profileImage'];
 
-      // 백엔드 정보 로그
-      _logger.info('백엔드 사용자 정보 - 닉네임: $nicknameFromBackend, 프로필 이미지: $profileImageFromBackend');
-
       if (token != null) {
         await AuthService.saveToken(token);
-        _logger.info('JWT 토큰 저장 완료: $token');
-        print("JWT 토큰: $token");
-        _logger.info('JWT 토큰 저장 완료: $token');
-      } else {
-        _logger.warning('응답에 토큰이 없습니다.');
+        _logger.info('JWT 토큰 저장 완료');
       }
 
       return {
@@ -70,82 +54,68 @@ Future<Map<String, dynamic>?> _getUserInfo({
         'userId': userId,
       };
     } else {
-      _logger.warning('백엔드 로그인 실패: ${response.statusCode} - ${response.body}');
+      _logger.warning('백엔드 로그인 실패: ${response.statusCode}');
       return null;
     }
-  } catch (error) {
-    _logger.severe('사용자 정보 요청 또는 백엔드 전송 실패: $error');
+  } catch (e) {
+    _logger.severe('카카오 로그인/백엔드 전송 실패: $e');
     return null;
   }
 }
 
-/// 로그인 후 커플 연결 체크
+/// 로그인 후 서버에서 커플 상태 확인 후 화면 이동
 Future<void> _checkCoupleConnection(BuildContext context, Map<String, dynamic> userInfo) async {
-  final prefs = await SharedPreferences.getInstance();
-  final isConnected = prefs.getBool('isCoupleConnected') ?? false;
+  final coupleStatus = await AuthService.fetchCoupleStatus();
 
-  if (isConnected) {
-    _logger.info('이미 커플 연결됨 → 홈으로 이동');
-    Navigator.pushReplacementNamed(context, '/home-screen');
+  if (coupleStatus != null && coupleStatus.status == "ACTIVE") {
+    _logger.info('커플 연결됨 → 홈으로 이동');
+    Navigator.pushReplacementNamed(context, '/home');
   } else {
     _logger.info('연결 안 됨 → 프로필 설정 화면으로 이동');
     Navigator.pushReplacementNamed(
       context,
-      '/profile_setup',
+      '/profile-setup',
       arguments: userInfo,
     );
   }
 }
 
+
 /// 메인 카카오 로그인 함수
 Future<void> signInWithKakao(BuildContext context) async {
   if (await AuthApi.instance.hasToken()) {
     try {
-      AccessTokenInfo tokenInfo = await UserApi.instance.accessTokenInfo();
-      _logger.info('토큰 유효성 체크 성공: ${tokenInfo.id} ${tokenInfo.expiresIn}');
+      final tokenInfo = await UserApi.instance.accessTokenInfo();
+      _logger.info('토큰 유효: ${tokenInfo.id} 만료까지: ${tokenInfo.expiresIn}');
 
       final OAuthToken? token = await TokenManagerProvider.instance.manager.getToken();
       if (token == null) throw Exception('토큰 없음');
 
-      final userInfo = await _getUserInfo(
-        idToken: null,
-        accessToken: token.accessToken,
-      );
-
+      final userInfo = await _getUserInfo(accessToken: token.accessToken);
       if (userInfo != null) {
         await _checkCoupleConnection(context, userInfo);
       }
     } catch (error) {
-      if (error is KakaoException && error.isInvalidTokenError()) {
-        _logger.warning('토큰 만료: $error');
-      } else {
-        _logger.severe('토큰 정보 조회 실패: $error');
-      }
+      _logger.warning('토큰 정보 조회 실패: $error');
       await loginWithKakaoAccount(context);
     }
   } else {
-    _logger.warning('발급된 토큰 없음');
     await loginWithKakaoAccount(context);
   }
 }
 
-/// 카카오톡으로 로그인 시도
+/// 카카오톡 앱으로 로그인
 Future<void> loginWithKakaoAccount(BuildContext context) async {
   if (await isKakaoTalkInstalled()) {
     try {
       OAuthToken token = await UserApi.instance.loginWithKakaoTalk();
-      _logger.info('카카오톡으로 로그인 성공: ${token.accessToken}');
+      _logger.info('카카오톡 로그인 성공: ${token.accessToken}');
 
-      final userInfo = await _getUserInfo(
-        idToken: null,
-        accessToken: token.accessToken,
-      );
-
+      final userInfo = await _getUserInfo(accessToken: token.accessToken);
       if (userInfo != null) {
         await _checkCoupleConnection(context, userInfo);
       }
     } catch (error) {
-      _logger.severe('카카오톡으로 로그인 실패: $error');
       if (error is PlatformException && error.code == 'CANCELED') return;
       await _loginWithKakaoAccountFallback(context);
     }
@@ -154,21 +124,17 @@ Future<void> loginWithKakaoAccount(BuildContext context) async {
   }
 }
 
-/// 카카오계정으로 로그인 (fallback)
+/// 카카오계정 로그인 (Fallback)
 Future<void> _loginWithKakaoAccountFallback(BuildContext context) async {
   try {
     OAuthToken token = await UserApi.instance.loginWithKakaoAccount();
-    _logger.info('카카오계정으로 로그인 성공: ${token.accessToken}');
+    _logger.info('카카오계정 로그인 성공: ${token.accessToken}');
 
-    final userInfo = await _getUserInfo(
-      idToken: null,
-      accessToken: token.accessToken,
-    );
-
+    final userInfo = await _getUserInfo(accessToken: token.accessToken);
     if (userInfo != null) {
       await _checkCoupleConnection(context, userInfo);
     }
   } catch (error) {
-    _logger.severe('카카오계정으로 로그인 실패: $error');
+    _logger.severe('카카오계정 로그인 실패: $error');
   }
 }
