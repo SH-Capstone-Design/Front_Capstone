@@ -20,7 +20,7 @@ class _BottomBarState extends State<BottomBar> with SingleTickerProviderStateMix
   int _selectedIndex = 0;
 
   final List<IconData> items = [
-    Icons.chat,
+    Icons.history,
     Icons.emoji_emotions,
     Icons.home,
     Icons.settings,

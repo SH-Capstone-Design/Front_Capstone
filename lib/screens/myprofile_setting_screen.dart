@@ -1,17 +1,11 @@
-// lib/screens/myprofile_setting_screen.dart
+// lib/screens/my_profile_setting_screen.dart
 import 'dart:io';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
-import 'package:mime/mime.dart';
-import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
-import '../core/constants.dart';
 import '../providers/user_provider.dart';
 import '../widgets/rounded_button.dart';
-import '../services/auth_service.dart';
+import '../core/constants.dart';
+import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 
 class MyProfileSettingScreen extends ConsumerStatefulWidget {
   const MyProfileSettingScreen({super.key});
@@ -30,27 +24,20 @@ class _MyProfileSettingScreenState
   @override
   void initState() {
     super.initState();
-    final userState = ref.read(userProvider);
-    final user = userState.value;
+    final user = ref.read(userProvider).value;
     _nicknameController = TextEditingController(text: user?['nickname'] ?? '');
     _latestProfileUrl = user?['profileImage'];
     _fetchLatestKakaoProfile();
   }
 
-  @override
-  void dispose() {
-    _nicknameController.dispose();
-    super.dispose();
-  }
-
   Future<void> _fetchLatestKakaoProfile() async {
     try {
-      final hasKakaoToken = await AuthApi.instance.hasToken();
-      if (hasKakaoToken) {
+      if (await AuthApi.instance.hasToken()) {
         final kakaoUser = await UserApi.instance.me();
         setState(() {
           _latestProfileUrl =
-              kakaoUser.kakaoAccount?.profile?.profileImageUrl ?? _latestProfileUrl;
+              kakaoUser.kakaoAccount?.profile?.profileImageUrl ??
+                  _latestProfileUrl;
         });
       }
     } catch (_) {}
@@ -59,70 +46,42 @@ class _MyProfileSettingScreenState
   Future<void> _pickImage() async {
     final file = await ref.read(userProvider.notifier).pickImageFromGallery();
     if (file != null) {
-      setState(() {
-        _pickedImage = file;
-      });
-    }
-  }
-
-  /// 🔹 S3 업로드
-  Future<String?> _uploadImage(File imageFile) async {
-    final token = await AuthService.getToken();
-    print('JWT Token: $token');
-    if (token == null) return null;
-
-    final uri = Uri.parse('${dotenv.env['BASE_URL']}/users/me/profile-image');
-    print('POST URL: ${dotenv.env['BASE_URL']}/users/me/profile-image');
-    final request = http.MultipartRequest('POST', uri);
-    request.headers['Authorization'] = 'Bearer $token';
-
-    final mimeType = lookupMimeType(imageFile.path)?.split('/') ?? ['image', 'jpeg'];
-
-    request.files.add(await http.MultipartFile.fromPath(
-      'image',
-      imageFile.path,
-      contentType: MediaType(mimeType[0], mimeType[1]),
-    ));
-
-    final response = await request.send();
-    final respStr = await response.stream.bytesToString();
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(respStr);
-      return data['profileImageUrl'];
-    } else {
-      throw Exception('업로드 실패: ${response.statusCode} $respStr');
+      setState(() => _pickedImage = file);
     }
   }
 
   Future<void> _onSavePressed() async {
     final nickname = _nicknameController.text.trim();
     if (nickname.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('닉네임을 입력해주세요.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('닉네임을 입력해주세요.')),
+      );
       return;
     }
 
     try {
-      String? imageUrl;
+      // 1️⃣ 이미지 업로드 (선택된 경우)
       if (_pickedImage != null) {
-        imageUrl = await _uploadImage(_pickedImage!);
-      } else if (_latestProfileUrl != null && _latestProfileUrl!.isNotEmpty) {
-        imageUrl = _latestProfileUrl;
+        final imageUrl =
+        await ref.read(userProvider.notifier).uploadProfileImage(_pickedImage!);
+        setState(() {
+          _latestProfileUrl = imageUrl;
+          _pickedImage = null;
+        });
       }
 
-      await ref.read(userProvider.notifier).updateUser(
-        nickname: nickname,
-        profileImage: imageUrl,
-      );
+      // 2️⃣ 닉네임 업데이트
+      await ref.read(userProvider.notifier).updateNickname(nickname);
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('프로필이 저장되었습니다.')));
-      Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('프로필이 저장되었습니다.')),
+        );
+        Navigator.pop(context, true);
+      }
     } catch (e) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('업데이트 실패: $e')));
-      print(e);
     }
   }
 
@@ -136,13 +95,7 @@ class _MyProfileSettingScreenState
         body: Center(child: CircularProgressIndicator()),
       );
     }
-    if (userState.hasError) {
-      return Scaffold(
-        body: Center(child: Text('사용자 정보 불러오기 실패')),
-      );
-    }
 
-    final user = userState.value;
     ImageProvider? avatar;
     if (_pickedImage != null) {
       avatar = FileImage(_pickedImage!);
@@ -174,7 +127,6 @@ class _MyProfileSettingScreenState
                 padding: EdgeInsets.symmetric(horizontal: size.width * 0.06),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const SizedBox(height: 20),
                     Center(
@@ -213,9 +165,6 @@ class _MyProfileSettingScreenState
                         ),
                         decoration: const InputDecoration(
                           hintText: '닉네임 설정',
-                          hintStyle: TextStyle(
-                            fontFamily: 'GowunBatang',
-                          ),
                           border: UnderlineInputBorder(),
                         ),
                       ),

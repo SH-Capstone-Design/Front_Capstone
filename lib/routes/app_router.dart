@@ -1,3 +1,4 @@
+import 'package:connectbeat/screens/character_screen.dart';
 import 'package:flutter/material.dart';
 
 // 화면 import
@@ -30,7 +31,7 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const CreateCodeScreen());
       case '/input-code':
         return MaterialPageRoute(builder: (_) => const InputCodeScreen());
-      case '/home-screen':
+      case '/home':
         return MaterialPageRoute(builder: (_) => const HomeScreen());
       case '/couple-date':
         return MaterialPageRoute(builder: (_) => const CoupleDateScreen());
@@ -46,10 +47,12 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const MyProfileSettingScreen());
       case '/splash':
         return MaterialPageRoute(builder: (_) => const SplashScreen());
-      case '/main-screen':
+      case '/main':
         return MaterialPageRoute(builder: (_) => const MainScreen());
       case '/emotion-result':
         return MaterialPageRoute(builder: (_) => const EmotionResultScreen());
+      case '/character' :
+        return MaterialPageRoute(builder: (_) => const CharacterScreen());
 
     // ✅ 채팅방 화면 라우트
       case '/chat':

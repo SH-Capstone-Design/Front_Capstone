@@ -72,7 +72,7 @@ class _InputCodeScreenState extends ConsumerState<InputCodeScreen> {
       await prefs.setString('coupleCode', 'connectbeat');
 
       ref.read(codeLoadingProvider.notifier).state = false;
-      Navigator.pushReplacementNamed(context, '/home-screen');
+      Navigator.pushReplacementNamed(context, '/home');
       return;
     }
 
@@ -81,7 +81,7 @@ class _InputCodeScreenState extends ConsumerState<InputCodeScreen> {
     ref.read(codeLoadingProvider.notifier).state = false;
 
     if (errorMsg == null) {
-      Navigator.pushReplacementNamed(context, '/home-screen');
+      Navigator.pushReplacementNamed(context, '/home');
     } else {
       ref.read(codeErrorProvider.notifier).state = errorMsg;
     }

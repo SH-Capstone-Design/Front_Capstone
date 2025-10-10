@@ -1,6 +1,3 @@
-// lib/widgets/message_bubble.dart
-// 말풍선 UI. isMine 여부에 따라 정렬/색상/꼬리 모양이 달라집니다.
-
 import 'package:connectbeat/models/chat_message.dart';
 import 'package:flutter/material.dart';
 
@@ -18,8 +15,11 @@ class MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = isMine ? Colors.pinkAccent.shade100 : Colors.white;
-    final textColor = Colors.black87;
+    // 배경색 조정 (ConnectBeat 배경과 조화)
+    final bgColor = isMine
+        ? const Color(0xFFFFC1CC).withOpacity(0.85) // 연핑크
+        : const Color(0xFFF0F0F0).withOpacity(0.75); // 연회색
+    final textColor = Colors.black; // 글자색 검은색
     final align = isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start;
     final mainAxis = isMine ? MainAxisAlignment.end : MainAxisAlignment.start;
 
@@ -75,7 +75,7 @@ class MessageBubble extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                _formatTime(DateTime.now()), // ✅ 서버에서 시간 안주므로 임시 처리
+                _formatTime(DateTime.now()), // 서버에서 시간 안주므로 임시 처리
                 style: const TextStyle(fontSize: 11, color: Colors.black45),
               ),
             ),

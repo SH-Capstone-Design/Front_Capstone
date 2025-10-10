@@ -1,11 +1,8 @@
-// splash_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/services/auth_service.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -18,68 +15,54 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _navigateNext();
+    _checkAuth();
   }
 
-  Future<void> _navigateNext() async {
+  Future<void> _checkAuth() async {
     await Future.delayed(const Duration(seconds: 2));
 
     final token = await AuthService.getToken();
-    final prefs = await SharedPreferences.getInstance();
-    final coupleCode = prefs.getString('coupleCode');
+    debugPrint("🔥 JWT 토큰: $token");
 
-    if (token != null) {
-      // 토큰 검증
-      final isValid = await _validateToken(token);
-      if (isValid && coupleCode != null) {
-        Navigator.pushReplacementNamed(context, '/home-screen');
-        return;
-      }
+    if (token == null) {
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, "/main");
+      return;
     }
 
-    Navigator.pushReplacementNamed(context, '/main-screen');
-  }
+    // 유저 정보는 단순 조회
+    final user = await AuthService.getUserProfile();
 
-  Future<bool> _validateToken(String token) async {
-    try {
-      final headers = {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      };
-      final res = await http.get(
-        Uri.parse('${dotenv.env['BASE_URL']}/users/me'),
-        headers: headers,
-      );
-      return res.statusCode == 200;
-    } catch (e) {
-      return false;
+    if (!mounted) return;
+
+    if (user == null) {
+      Navigator.pushReplacementNamed(context, "/login");
+      return;
+    }
+
+    // ✅ 커플 상태 확인
+    final couple = await AuthService.fetchCoupleStatus();
+    final status = couple?.status ?? '';
+    debugPrint("🔥 커플 상태: $status");
+
+    if (status == "ACTIVE") {
+      Navigator.pushReplacementNamed(context, "/home"); // 커플 연결 완료 → 홈
+    } else {
+      Navigator.pushReplacementNamed(context, "/couple-code"); // 커플 연결 안 됨 → 연결 페이지
     }
   }
 
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
-    return Scaffold(
-      body: Stack(
-        children: [
-          SizedBox.expand(
-            child: Image.asset(
-              AppConstants.backgroundPath,
-              fit: BoxFit.cover,
-            ),
-          ),
-          Center(
-            child: SizedBox(
-              height: size.height * 0.2,
-              child: Image.asset(
-                AppConstants.logoPath,
-                fit: BoxFit.contain,
-              ),
-            ),
-          ),
-        ],
+    return const Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Image(
+          image: AssetImage("assets/images/ConnectBeat_logo.png"),
+          width: 180,
+          height: 180,
+        ),
       ),
     );
   }
