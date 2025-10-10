@@ -10,7 +10,6 @@
 // import 'package:connectbeat/models/chat_message.dart';
 // import 'package:connectbeat/models/chat_room_event.dart';
 // import 'package:connectbeat/services/chat_repository_impl.dart';
-// import 'package:connectbeat/screens/chat_room_screen.dart';
 //
 // class TopicSelectScreen extends ConsumerWidget {
 //   const TopicSelectScreen({super.key});
@@ -46,6 +45,7 @@
 //                   itemBuilder: (context, index) {
 //                     final category = categories[index];
 //                     final isSelected = selectedCategory == category;
+//
 //                     return ListTile(
 //                       title: Text(
 //                         category.name,
@@ -65,6 +65,8 @@
 //                   },
 //                 ),
 //               ),
+//
+//               // ✅ 하단 버튼
 //               Padding(
 //                 padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 16),
 //                 child: ElevatedButton(
@@ -79,27 +81,21 @@
 //                       ? null
 //                       : () async {
 //                     try {
+//                       // 🔐 토큰 확인
 //                       final token = await AuthService.getToken();
 //                       if (token == null) {
 //                         if (context.mounted) {
 //                           ScaffoldMessenger.of(context).showSnackBar(
-//                             const SnackBar(
-//                               content: Text("로그인이 필요합니다."),
-//                             ),
+//                             const SnackBar(content: Text("로그인이 필요합니다.")),
 //                           );
 //                         }
 //                         return;
 //                       }
 //
-//                       // ✅ 랜덤 주제 가져오기
-//                       final topic = await ref.read(
-//                         randomTopicProvider(selectedCategory.categoryId).future,
-//                       );
-//
 //                       final userId = ref.read(currentUserProvider);
 //                       final chatRepo = ref.read(chatRepositoryProvider);
 //
-//                       // ✅ 세션 생성 요청
+//                       // ✅ 채팅 세션 생성 (REST /api/chat/rooms)
 //                       final ChatRoom room = await chatRepo.startSession();
 //                       debugPrint("✅ 세션 생성 성공: ${room.chatSessionId}");
 //
@@ -110,32 +106,49 @@
 //                         },
 //                       );
 //
-//                       // ✅ 이벤트 구독 (세션 종료)
+//                       // ✅ 이벤트 구독
 //                       if (chatRepo is ChatRepositoryImpl) {
-//                         chatRepo.subscribeEvents(room.chatSessionId).listen(
-//                               (ChatRoomEvent event) {
-//                             debugPrint("📡 이벤트 수신: ${event.eventType}");
-//                             if (event.eventType == "CONVERSATION_ENDED") {
-//                               if (context.mounted) {
-//                                 Navigator.pushReplacementNamed(
-//                                   context,
-//                                   '/analysis',
-//                                   arguments: {'sessionId': room.chatSessionId},
-//                                 );
-//                               }
+//                         chatRepo
+//                             .subscribeEvents(room.chatSessionId)
+//                             .listen((ChatRoomEvent event) {
+//                           debugPrint("📡 이벤트 수신: ${event.eventType}");
+//
+//                           // 🔹 대화 종료 이벤트
+//                           if (event.eventType == "CONVERSATION_ENDED") {
+//                             if (context.mounted) {
+//                               Navigator.pushReplacementNamed(
+//                                 context,
+//                                 '/analysis',
+//                                 arguments: {'sessionId': room.chatSessionId},
+//                               );
 //                             }
-//                           },
-//                         );
+//                           }
+//
+//                           // 🔹 대화 시작 (주제 선택 완료)
+//                           if (event.eventType == "CONVERSATION_STARTED") {
+//                             final topic = event.payload?['topic'] ??
+//                                 "주제가 선택되었습니다.";
+//                             ScaffoldMessenger.of(context).showSnackBar(
+//                               SnackBar(content: Text('주제: $topic')),
+//                             );
+//                           }
+//                         });
 //                       }
 //
-//                       // ✅ 채팅방 화면으로 이동 (주제 함께 전달)
+//                       // ✅ 주제 선택 STOMP 전송
+//                       chatRepo.sendCategorySelect(
+//                         chatSessionId: room.chatSessionId,
+//                         categoryId: selectedCategory.categoryId,
+//                       );
+//
+//                       // ✅ 채팅방 화면으로 이동
 //                       if (context.mounted) {
 //                         Navigator.pushNamed(
 //                           context,
 //                           '/chat',
 //                           arguments: {
 //                             'room': room,
-//                             'topic': topic,
+//                             'topic': selectedCategory.name,
 //                             'currentUserId': userId ?? "unknown",
 //                           },
 //                         );
@@ -151,7 +164,11 @@
 //                   },
 //                   child: const Text(
 //                     '대화 시작',
-//                     style: TextStyle(fontSize: 16, fontFamily: 'GowunBatang'),
+//                     style: TextStyle(
+//                       fontSize: 16,
+//                       fontFamily: 'GowunBatang',
+//                       color: Colors.white,
+//                     ),
 //                   ),
 //                 ),
 //               ),
@@ -159,7 +176,12 @@
 //           );
 //         },
 //         loading: () => const Center(child: CircularProgressIndicator()),
-//         error: (e, _) => Center(child: Text('카테고리 로드 실패: $e')),
+//         error: (e, _) => Center(
+//           child: Text(
+//             '카테고리 로드 실패: $e',
+//             style: const TextStyle(fontFamily: 'GowunBatang'),
+//           ),
+//         ),
 //       ),
 //     );
 //   }
