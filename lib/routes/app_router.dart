@@ -1,5 +1,8 @@
-import 'package:connectbeat/screens/character_screen.dart';
 import 'package:flutter/material.dart';
+
+// ✅ 추가된 화면 import
+import 'package:connectbeat/screens/topic_select_screen.dart';
+import 'package:connectbeat/screens/character_screen.dart';
 
 // 화면 import
 import 'package:connectbeat/screens/login_screen.dart';
@@ -39,8 +42,16 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const SettingScreen());
       case '/create-chat':
         return MaterialPageRoute(builder: (_) => const CreateChatScreen());
-      case '/invite-partner':
-        return MaterialPageRoute(builder: (_) => const InvitePartnerScreen());
+
+    // case '/invite-partner':
+    //   final args = settings.arguments as Map<String, dynamic>;
+    //   return MaterialPageRoute(
+    //     builder: (_) => InvitePartnerScreen(
+    //       chatSessionId: args['chatSessionId'],
+    //       inviteeId: args['inviteeId'],
+    //     ),
+    //   );
+
       case '/couple-manage':
         return MaterialPageRoute(builder: (_) => const CoupleManageScreen());
       case '/myprofile-setting':
@@ -51,16 +62,20 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const MainScreen());
       case '/emotion-result':
         return MaterialPageRoute(builder: (_) => const EmotionResultScreen());
-      case '/character' :
+
+    // ✅ 둘 다 유지: 캐릭터 & 주제 선택
+      case '/character':
         return MaterialPageRoute(builder: (_) => const CharacterScreen());
+      // case '/topic-select':
+      //   return MaterialPageRoute(builder: (_) => const TopicSelectScreen());
 
     // ✅ 채팅방 화면 라우트
       case '/chat':
         final args = settings.arguments as Map<String, dynamic>;
         return MaterialPageRoute(
           builder: (_) => ChatRoomScreen(
-            room: args['room'],
-            currentUserId: args['currentUserId'],
+            room: args['room'] as ChatRoom,
+            currentUserId: args['currentUserId'] as String,
           ),
         );
 
@@ -69,8 +84,8 @@ class AppRouter {
         final args = settings.arguments as Map<String, dynamic>;
         return MaterialPageRoute(
           builder: (_) => ProfileSetupScreen(
-            nickname: args['nickname'],
-            profileImageUrl: args['profileImageUrl'],
+            nickname: args['nickname'] as String,
+            profileImageUrl: args['profileImageUrl'] as String,
           ),
         );
 

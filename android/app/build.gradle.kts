@@ -24,7 +24,7 @@ android {
         applicationId = "com.example.connectbeat"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 23 //flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -83,3 +83,13 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // ✅ Kotlin 표준 라이브러리
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.8.22")
+
+    // ✅ 카카오 로그인 SDK
+    implementation("com.kakao.sdk:v2-user:2.20.6")
+    implementation("androidx.appcompat:appcompat:1.6.1")
+}
+

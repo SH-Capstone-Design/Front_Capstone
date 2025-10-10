@@ -1,122 +1,165 @@
-// import 'package:connectbeat/providers/chat_repository_provider.dart';
+// // lib/screens/topic_select_screen.dart
 // import 'package:flutter/material.dart';
 // import 'package:flutter_riverpod/flutter_riverpod.dart';
-// import 'package:connectbeat/widgets/rounded_button.dart';
-// import 'package:connectbeat/widgets/bottom_bar.dart';
-// import 'package:connectbeat/services/chat_repository.dart'; // ChatRoom 참조
+// import 'package:connectbeat/providers/topic_provider.dart';
+// import 'package:connectbeat/models/topic.dart';
+// import 'package:connectbeat/providers/chat_repository_provider.dart';
+// import 'package:connectbeat/providers/current_user_provider.dart';
+// import 'package:connectbeat/services/auth_service.dart';
+// import 'package:connectbeat/models/chat_room.dart';
+// import 'package:connectbeat/models/chat_message.dart';
+// import 'package:connectbeat/models/chat_room_event.dart';
+// import 'package:connectbeat/services/chat_repository_impl.dart';
+// import 'package:connectbeat/screens/chat_room_screen.dart';
 //
-// class TopicSelectScreen extends ConsumerStatefulWidget {
-//   final int selectedIndex;
-//   final ValueChanged<int> onNavTap;
-//
-//   const TopicSelectScreen({
-//     super.key,
-//     this.selectedIndex = 0,
-//     this.onNavTap = _defaultOnTap,
-//   });
-//
-//   static void _defaultOnTap(int idx) {}
+// class TopicSelectScreen extends ConsumerWidget {
+//   const TopicSelectScreen({super.key});
 //
 //   @override
-//   ConsumerState<TopicSelectScreen> createState() => _TopicSelectScreenState();
-// }
-//
-// class _TopicSelectScreenState extends ConsumerState<TopicSelectScreen> {
-//   String? _selectedTopic;
-//
-//   final List<String> _topics = [
-//     "연애",
-//     "학업",
-//     "취미",
-//     "여행",
-//     "기타",
-//   ];
-//
-//   void _startChat() async {
-//     if (_selectedTopic == null) {
-//       ScaffoldMessenger.of(context).showSnackBar(
-//         const SnackBar(content: Text("대화 주제를 선택하세요")),
-//       );
-//       return;
-//     }
-//
-//     try {
-//       // ✅ 실제 세션 생성 API 호출
-//       final chatRepo = ref.read(chatRepositoryProvider);
-//       final ChatRoom room = await chatRepo.startSession();
-//
-//       if (!mounted) return;
-//
-//       Navigator.pushNamed(
-//         context,
-//         '/chat',
-//         arguments: {
-//           'room': room,
-//           'currentUserId': 'test-user-123', // TODO: 실제 로그인 ID로 교체
-//         },
-//       );
-//     } catch (e) {
-//       if (!mounted) return;
-//       ScaffoldMessenger.of(context).showSnackBar(
-//         SnackBar(content: Text("채팅방 생성 실패: $e")),
-//       );
-//     }
-//   }
-//
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     final size = MediaQuery.of(context).size;
+//   Widget build(BuildContext context, WidgetRef ref) {
+//     final categoriesAsync = ref.watch(topicCategoriesProvider);
+//     final selectedCategory = ref.watch(selectedCategoryProvider);
 //
 //     return Scaffold(
 //       backgroundColor: const Color(0xFFFFF8FC),
-//       body: SafeArea(
-//         child: Column(
-//           children: [
-//             SizedBox(height: size.height * 0.06),
-//             const Text(
-//               "대화 주제 카테고리",
-//               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-//             ),
-//             const SizedBox(height: 20),
-//             Padding(
-//               padding: const EdgeInsets.symmetric(horizontal: 30),
-//               child: DropdownButtonFormField<String>(
-//                 value: _selectedTopic,
-//                 items: _topics
-//                     .map((topic) => DropdownMenuItem(
-//                   value: topic,
-//                   child: Text(topic),
-//                 ))
-//                     .toList(),
-//                 decoration: InputDecoration(
-//                   filled: true,
-//                   fillColor: Colors.white,
-//                   contentPadding:
-//                   const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-//                   border: OutlineInputBorder(
-//                     borderRadius: BorderRadius.circular(12),
+//       appBar: AppBar(
+//         title: const Text(
+//           '대화 주제 선택',
+//           style: TextStyle(fontFamily: 'GowunBatang'),
+//         ),
+//         backgroundColor: const Color(0xFFFFF8FC),
+//       ),
+//       body: categoriesAsync.when(
+//         data: (categories) {
+//           return Column(
+//             children: [
+//               const Padding(
+//                 padding: EdgeInsets.all(16.0),
+//                 child: Text(
+//                   '대화할 주제의 카테고리를 선택하세요 💬',
+//                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+//                 ),
+//               ),
+//               Expanded(
+//                 child: ListView.builder(
+//                   itemCount: categories.length,
+//                   itemBuilder: (context, index) {
+//                     final category = categories[index];
+//                     final isSelected = selectedCategory == category;
+//                     return ListTile(
+//                       title: Text(
+//                         category.name,
+//                         style: TextStyle(
+//                           fontFamily: 'GowunBatang',
+//                           fontSize: 16,
+//                           color: isSelected ? Colors.pinkAccent : Colors.black87,
+//                         ),
+//                       ),
+//                       trailing: isSelected
+//                           ? const Icon(Icons.check_circle, color: Colors.pinkAccent)
+//                           : const Icon(Icons.circle_outlined, color: Colors.grey),
+//                       onTap: () {
+//                         ref.read(selectedCategoryProvider.notifier).state = category;
+//                       },
+//                     );
+//                   },
+//                 ),
+//               ),
+//               Padding(
+//                 padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 16),
+//                 child: ElevatedButton(
+//                   style: ElevatedButton.styleFrom(
+//                     backgroundColor: Colors.pinkAccent,
+//                     minimumSize: const Size(double.infinity, 48),
+//                     shape: RoundedRectangleBorder(
+//                       borderRadius: BorderRadius.circular(12),
+//                     ),
+//                   ),
+//                   onPressed: selectedCategory == null
+//                       ? null
+//                       : () async {
+//                     try {
+//                       final token = await AuthService.getToken();
+//                       if (token == null) {
+//                         if (context.mounted) {
+//                           ScaffoldMessenger.of(context).showSnackBar(
+//                             const SnackBar(
+//                               content: Text("로그인이 필요합니다."),
+//                             ),
+//                           );
+//                         }
+//                         return;
+//                       }
+//
+//                       // ✅ 랜덤 주제 가져오기
+//                       final topic = await ref.read(
+//                         randomTopicProvider(selectedCategory.categoryId).future,
+//                       );
+//
+//                       final userId = ref.read(currentUserProvider);
+//                       final chatRepo = ref.read(chatRepositoryProvider);
+//
+//                       // ✅ 세션 생성 요청
+//                       final ChatRoom room = await chatRepo.startSession();
+//                       debugPrint("✅ 세션 생성 성공: ${room.chatSessionId}");
+//
+//                       // ✅ 메시지 구독
+//                       chatRepo.subscribeMessages(room.chatSessionId).listen(
+//                             (ChatMessage msg) {
+//                           debugPrint("📩 메시지 수신: ${msg.content}");
+//                         },
+//                       );
+//
+//                       // ✅ 이벤트 구독 (세션 종료)
+//                       if (chatRepo is ChatRepositoryImpl) {
+//                         chatRepo.subscribeEvents(room.chatSessionId).listen(
+//                               (ChatRoomEvent event) {
+//                             debugPrint("📡 이벤트 수신: ${event.eventType}");
+//                             if (event.eventType == "CONVERSATION_ENDED") {
+//                               if (context.mounted) {
+//                                 Navigator.pushReplacementNamed(
+//                                   context,
+//                                   '/analysis',
+//                                   arguments: {'sessionId': room.chatSessionId},
+//                                 );
+//                               }
+//                             }
+//                           },
+//                         );
+//                       }
+//
+//                       // ✅ 채팅방 화면으로 이동 (주제 함께 전달)
+//                       if (context.mounted) {
+//                         Navigator.pushNamed(
+//                           context,
+//                           '/chat',
+//                           arguments: {
+//                             'room': room,
+//                             'topic': topic,
+//                             'currentUserId': userId ?? "unknown",
+//                           },
+//                         );
+//                       }
+//                     } catch (e) {
+//                       debugPrint("❌ 세션 생성 실패: $e");
+//                       if (context.mounted) {
+//                         ScaffoldMessenger.of(context).showSnackBar(
+//                           SnackBar(content: Text('채팅방 생성 실패: $e')),
+//                         );
+//                       }
+//                     }
+//                   },
+//                   child: const Text(
+//                     '대화 시작',
+//                     style: TextStyle(fontSize: 16, fontFamily: 'GowunBatang'),
 //                   ),
 //                 ),
-//                 hint: const Text("주제를 선택하세요"),
-//                 onChanged: (val) => setState(() => _selectedTopic = val),
 //               ),
-//             ),
-//             const Spacer(flex: 2),
-//             Padding(
-//               padding: const EdgeInsets.symmetric(horizontal: 30),
-//               child: RoundedButton(
-//                 text: "대화 시작",
-//                 onPressed: _startChat,
-//               ),
-//             ),
-//             const Spacer(flex: 3),
-//           ],
-//         ),
-//       ),
-//       bottomNavigationBar: BottomBar(
-//         currentIndex: widget.selectedIndex,
-//         onTap: widget.onNavTap,
+//             ],
+//           );
+//         },
+//         loading: () => const Center(child: CircularProgressIndicator()),
+//         error: (e, _) => Center(child: Text('카테고리 로드 실패: $e')),
 //       ),
 //     );
 //   }

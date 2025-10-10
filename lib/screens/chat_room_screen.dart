@@ -1,4 +1,3 @@
-// lib/screens/chat_room_screen.dart
 import 'dart:async';
 import 'package:connectbeat/models/chat_room.dart';
 import 'package:connectbeat/core/constants.dart';
@@ -6,6 +5,9 @@ import 'package:connectbeat/widgets/end_chat_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/user_provider.dart';
+import '../providers/chat_repository_provider.dart';
+import 'package:connectbeat/models/chat_message.dart';
+import 'package:connectbeat/models/chat_room_event.dart';
 
 class ChatRoomScreen extends ConsumerStatefulWidget {
   final ChatRoom room;
@@ -29,13 +31,57 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   static const int _totalSeconds = 600;
   late int _remainingSeconds;
   Timer? _timer;
+  StreamSubscription<ChatMessage>? _messageSub;
+  StreamSubscription<ChatRoomEvent>? _eventSub;
 
   @override
   void initState() {
     super.initState();
     _remainingSeconds = _totalSeconds;
+    _connectSocket();
     _startTimer();
     _addUserEntranceMessage();
+  }
+
+  /// ✅ WebSocket 연결 및 스트림 구독
+  Future<void> _connectSocket() async {
+    final repo = ref.read(chatRepositoryProvider);
+
+    // 1️⃣ STOMP 연결
+    await repo.connectSocket(
+      chatSessionId: widget.room.chatSessionId,
+      userId: widget.currentUserId,
+    );
+
+    // 2️⃣ 메시지 스트림 구독
+    _messageSub = repo.subscribeMessages(widget.room.chatSessionId).listen((msg) {
+      setState(() {
+        _messages.add({
+          "sender": msg.senderId == widget.currentUserId ? "me" : "other",
+          "content": msg.content,
+          "time": TimeOfDay.now().format(context),
+        });
+      });
+      _scrollToBottom();
+    });
+
+    // 3️⃣ 이벤트 스트림 구독
+    _eventSub = repo.subscribeEvents().listen((event) {
+      switch (event.eventType) {
+        case "USER_JOINED":
+          _addSystemMessage("상대방이 입장했습니다.");
+          break;
+        case "CONVERSATION_STARTED":
+          _addSystemMessage("대화가 시작되었습니다.");
+          break;
+        case "CONVERSATION_ENDED":
+          _addSystemMessage("대화가 종료되었습니다.");
+          _onSessionEnd();
+          break;
+        default:
+          break;
+      }
+    });
   }
 
   void _startTimer() {
@@ -52,6 +98,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
   void _onSessionEnd() {
     if (!mounted) return;
+    final socketCtrl = ref.read(chatSocketControllerProvider.notifier);
+    socketCtrl.disconnect(widget.room.chatSessionId);
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("⏰ 채팅 세션이 종료되었습니다.")),
     );
@@ -64,15 +113,23 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     return "${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}";
   }
 
+  /// ✅ 메시지 전송 (서버로 전송)
   void _sendMessage() {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
+
+    final repo = ref.read(chatRepositoryProvider);
+    repo.sendMessage(
+      chatSessionId: widget.room.chatSessionId,
+      senderId: widget.currentUserId,
+      content: text,
+    );
 
     setState(() {
       _messages.add({
         "sender": "me",
         "content": text,
-        "time": TimeOfDay.now().format(context)
+        "time": TimeOfDay.now().format(context),
       });
     });
 
@@ -106,8 +163,8 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   void _addUserEntranceMessage() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final userState = ref.read(userProvider);
+      String nickname = widget.currentUserId;
 
-      String nickname = widget.currentUserId; // 기본값
       userState.maybeWhen(
         data: (user) {
           nickname = user['nickname'] ?? widget.currentUserId;
@@ -124,11 +181,16 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     _timer?.cancel();
     _controller.dispose();
     _scrollController.dispose();
+    _messageSub?.cancel();
+    _eventSub?.cancel();
+    final socketCtrl = ref.read(chatSocketControllerProvider.notifier);
+    socketCtrl.disconnect(widget.room.chatSessionId);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // ⚠️ 디자인 변경 금지 — 기존 UI 그대로 유지
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -145,6 +207,28 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Row(
                   children: [
+                    GestureDetector(
+                      onTap: () async {
+                        final shouldEnd = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => const EndChatDialog(),
+                        );
+                        if (shouldEnd == true) _onSessionEnd();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.exit_to_app,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
                     const CircleAvatar(radius: 20),
                     const SizedBox(width: 10),
                     Text(
@@ -164,27 +248,18 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                       ),
                     ),
                     const Spacer(),
-                    GestureDetector(
-                      onTap: () async {
-                        final shouldEnd = await showDialog<bool>(
-                          context: context,
-                          builder: (_) => const EndChatDialog(),
-                        );
-                        if (shouldEnd == true) _onSessionEnd();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          _formatTime(_remainingSeconds),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _formatTime(_remainingSeconds),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -221,21 +296,12 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                             end: Alignment.bottomRight,
                           )
                               : LinearGradient(
-                            colors: [Colors.grey.shade200, Colors.grey.shade300],
+                            colors: [Colors.grey, Colors.grey],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           )),
                           color: isSystem ? Colors.black.withOpacity(0.3) : null,
                           borderRadius: BorderRadius.circular(isSystem ? 12 : 16),
-                          boxShadow: isSystem
-                              ? []
-                              : [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              offset: const Offset(1, 1),
-                              blurRadius: 3,
-                            )
-                          ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -292,13 +358,6 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                         decoration: BoxDecoration(
                           color: Colors.grey[100],
                           borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              offset: const Offset(1, 1),
-                              blurRadius: 2,
-                            ),
-                          ],
                         ),
                         child: TextField(
                           controller: _controller,

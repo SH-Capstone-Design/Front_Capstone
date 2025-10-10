@@ -43,6 +43,8 @@ class CreateChatScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 60),
+
+                // ✅ 채팅방 생성 버튼
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 30),
                   child: RoundedButton(
@@ -61,18 +63,29 @@ class CreateChatScreen extends ConsumerWidget {
 
                         final userId = ref.read(currentUserProvider);
                         final chatRepo = ref.read(chatRepositoryProvider);
+                        final socketCtrl =
+                        ref.read(chatSocketControllerProvider.notifier);
 
+                        // ✅ 세션 생성 (REST)
                         final ChatRoom room = await chatRepo.startSession();
                         debugPrint("✅ 세션 생성 성공: ${room.chatSessionId}");
 
+                        // ✅ STOMP 연결
+                        await socketCtrl.connect(
+                          chatSessionId: room.chatSessionId,
+                          userId: userId ?? "unknown",
+                        );
+
+                        // ✅ 메시지 스트림 구독
                         chatRepo.subscribeMessages(room.chatSessionId).listen(
                               (ChatMessage msg) {
-                            debugPrint("📩 메시지 수신: ${msg.content}");
+                            debugPrint("💬 메시지 수신: ${msg.content}");
                           },
                         );
 
+                        // ✅ 이벤트 스트림 구독
                         if (chatRepo is ChatRepositoryImpl) {
-                          chatRepo.subscribeEvents(room.chatSessionId).listen(
+                          chatRepo.subscribeEvents().listen(
                                 (ChatRoomEvent event) {
                               debugPrint("📡 이벤트 수신: ${event.eventType}");
                               if (event.eventType == "CONVERSATION_ENDED") {
@@ -80,7 +93,9 @@ class CreateChatScreen extends ConsumerWidget {
                                   Navigator.pushReplacementNamed(
                                     context,
                                     '/analysis',
-                                    arguments: {'sessionId': room.chatSessionId},
+                                    arguments: {
+                                      'sessionId': room.chatSessionId,
+                                    },
                                   );
                                 }
                               }
@@ -88,6 +103,7 @@ class CreateChatScreen extends ConsumerWidget {
                           );
                         }
 
+                        // ✅ 채팅방 화면으로 이동
                         if (context.mounted) {
                           Navigator.pushNamed(
                             context,
@@ -109,7 +125,19 @@ class CreateChatScreen extends ConsumerWidget {
                     },
                   ),
                 ),
+
                 const Spacer(),
+
+                // ✅ 주제 선택 버튼
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 30),
+                  child: RoundedButton(
+                    text: "주제 선택 후 채팅 시작",
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/topic-select');
+                    },
+                  ),
+                ),
               ],
             ),
           ),

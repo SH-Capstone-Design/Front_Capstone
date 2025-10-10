@@ -27,6 +27,14 @@ class _InputCodeScreenState extends ConsumerState<InputCodeScreen> {
     try {
       final String linkUrl = '$baseUrl/couples/link';
 
+      // 디버그 로그 (요청 직전)
+      print("🪪 Sending request to $linkUrl");
+      print("🪪 Headers: ${{
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      }}");
+      print("🪪 Body: ${jsonEncode({'code': code})}");
+
       final response = await http.post(
         Uri.parse(linkUrl),
         headers: {
@@ -35,6 +43,9 @@ class _InputCodeScreenState extends ConsumerState<InputCodeScreen> {
         },
         body: jsonEncode({'code': code}),
       );
+
+      print("🧩 Response status: ${response.statusCode}");
+      print("🧩 Response body: ${response.body}");
 
       if (response.statusCode == 200) {
         // 연결 성공 → SharedPreferences 업데이트

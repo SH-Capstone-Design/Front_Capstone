@@ -9,7 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectbeat/services/chat_repository.dart';
 import 'package:connectbeat/providers/chat_repository_provider.dart';
 
-/// 채팅방 상태
+/// ✅ 채팅방 상태
 class ChatRoomState {
   final bool creating; // 세션 생성 중 여부
   final ChatRoom? room; // 생성된 채팅방 정보
@@ -38,7 +38,7 @@ class ChatRoomState {
   }
 }
 
-/// 채팅방 컨트롤러
+/// ✅ 채팅방 컨트롤러 (상태 + 이벤트 관리)
 class ChatRoomController extends Notifier<ChatRoomState> {
   late final ChatRepository _repo;
   StreamSubscription<ChatRoomEvent>? _eventSub;
@@ -53,18 +53,25 @@ class ChatRoomController extends Notifier<ChatRoomState> {
   }
 
   /// ✅ 세션 생성 (REST: POST /api/chat/rooms)
-  Future<void> startSession() async {
+  Future<void> startSession({required String userId}) async {
     state = state.copyWith(creating: true, error: null);
+
     try {
+      // 1️⃣ 세션 생성
       final room = await _repo.startSession();
       state = state.copyWith(creating: false, room: room);
 
-      // ✅ 이벤트 구독 시작
-      _eventSub?.cancel();
+      // 2️⃣ WebSocket 연결 (STOMP)
       if (_repo is ChatRepositoryImpl) {
-        _eventSub = (_repo as ChatRepositoryImpl)
-            .subscribeEvents(room.chatSessionId)
-            .listen((event) {
+        final chatRepo = _repo as ChatRepositoryImpl;
+        await chatRepo.connectSocket(
+          chatSessionId: room.chatSessionId,
+          userId: userId,
+        );
+
+        // 3️⃣ 이벤트 구독 시작 (파라미터 없음)
+        _eventSub?.cancel();
+        _eventSub = chatRepo.subscribeEvents().listen((event) {
           state = state.copyWith(events: [...state.events, event]);
         });
       }
@@ -73,7 +80,7 @@ class ChatRoomController extends Notifier<ChatRoomState> {
     }
   }
 
-  /// ✅ 세션 종료 (REST: POST /api/chat/rooms/end)
+  /// ✅ 세션 종료 (REST + 소켓 종료)
   Future<void> closeSession() async {
     final room = state.room;
     if (room == null) return;
@@ -87,14 +94,14 @@ class ChatRoomController extends Notifier<ChatRoomState> {
     }
   }
 
-  /// 상태 초기화
+  /// ✅ 상태 초기화
   void clear() {
     _eventSub?.cancel();
     state = const ChatRoomState();
   }
 }
 
-/// Provider
+/// ✅ Provider 등록
 final chatRoomControllerProvider =
 NotifierProvider<ChatRoomController, ChatRoomState>(
   ChatRoomController.new,
