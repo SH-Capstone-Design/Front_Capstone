@@ -54,17 +54,16 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     );
 
     // 2️⃣ 메시지 스트림 구독
-    _messageSub =
-        repo.subscribeMessages(widget.room.chatSessionId).listen((msg) {
-          setState(() {
-            _messages.add({
-              "sender": msg.senderId == widget.currentUserId ? "me" : "other",
-              "content": msg.content,
-              "time": TimeOfDay.now().format(context),
-            });
-          });
-          _scrollToBottom();
+    _messageSub = repo.subscribeMessages(widget.room.chatSessionId).listen((msg) {
+      setState(() {
+        _messages.add({
+          "sender": msg.senderId == widget.currentUserId ? "me" : "other",
+          "content": msg.content,
+          "time": TimeOfDay.now().format(context),
         });
+      });
+      _scrollToBottom();
+    });
 
     // 3️⃣ 이벤트 스트림 구독
     _eventSub = repo.subscribeEvents().listen((event) {
@@ -101,6 +100,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     if (!mounted) return;
     final socketCtrl = ref.read(chatSocketControllerProvider.notifier);
     socketCtrl.disconnect(widget.room.chatSessionId);
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("⏰ 채팅 세션이 종료되었습니다.")),
     );
@@ -163,7 +163,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   void _addUserEntranceMessage() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final userState = ref.read(userProvider);
-      String nickname = widget.currentUserId; // 기본값
+      String nickname = widget.currentUserId;
 
       userState.maybeWhen(
         data: (user) {
@@ -204,8 +204,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
             children: [
               // 🔹 AppBar
               Padding(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Row(
                   children: [
                     GestureDetector(
@@ -250,8 +249,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                     ),
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: Colors.redAccent.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(12),
@@ -269,12 +267,11 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 ),
               ),
 
-              // 🔹 채팅 메시지 영역 (디자인 유지)
+              // 🔹 채팅 메시지 영역
               Expanded(
                 child: ListView.builder(
                   controller: _scrollController,
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   itemCount: _messages.length,
                   itemBuilder: (context, index) {
                     final msg = _messages[index];
@@ -285,38 +282,26 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                     return Align(
                       alignment: isSystem
                           ? Alignment.center
-                          : (isMe
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft),
+                          : (isMe ? Alignment.centerRight : Alignment.centerLeft),
                       child: Container(
                         margin: const EdgeInsets.symmetric(vertical: 4),
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 8, horizontal: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                         decoration: BoxDecoration(
                           gradient: isSystem
                               ? null
                               : (isMe
                               ? const LinearGradient(
-                            colors: [
-                              Colors.blueAccent,
-                              Colors.lightBlueAccent
-                            ],
+                            colors: [Colors.blueAccent, Colors.lightBlueAccent],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           )
                               : LinearGradient(
-                            colors: [
-                              Colors.grey,
-                              Colors.grey
-                            ],
+                            colors: [Colors.grey, Colors.grey],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           )),
-                          color: isSystem
-                              ? Colors.black.withOpacity(0.3)
-                              : null,
-                          borderRadius:
-                          BorderRadius.circular(isSystem ? 12 : 16),
+                          color: isSystem ? Colors.black.withOpacity(0.3) : null,
+                          borderRadius: BorderRadius.circular(isSystem ? 12 : 16),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -326,14 +311,11 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                               style: TextStyle(
                                 fontFamily: 'GowunBatang',
                                 fontSize: isSystem ? 12 : 16,
-                                fontStyle: isSystem
-                                    ? FontStyle.italic
-                                    : FontStyle.normal,
+                                fontStyle:
+                                isSystem ? FontStyle.italic : FontStyle.normal,
                                 color: isSystem
                                     ? Colors.white
-                                    : (isMe
-                                    ? Colors.white
-                                    : Colors.black87),
+                                    : (isMe ? Colors.white : Colors.black87),
                               ),
                             ),
                             if (!isSystem) ...[
@@ -343,9 +325,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                                 style: TextStyle(
                                   fontFamily: 'GowunBatang',
                                   fontSize: 10,
-                                  color: isMe
-                                      ? Colors.white70
-                                      : Colors.grey[600],
+                                  color: isMe ? Colors.white70 : Colors.grey[600],
                                 ),
                               ),
                             ]
@@ -357,10 +337,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 ),
               ),
 
-              // 🔹 메시지 입력창 (디자인 유지)
+              // 🔹 메시지 입력창
               Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.9),
                   border: const Border(
@@ -370,14 +349,12 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 child: Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.add_circle_outline,
-                          color: Colors.grey),
+                      icon: const Icon(Icons.add_circle_outline, color: Colors.grey),
                       onPressed: () {},
                     ),
                     Expanded(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.grey[100],
                           borderRadius: BorderRadius.circular(20),
@@ -400,8 +377,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                       ),
                     ),
                     IconButton(
-                      icon:
-                      const Icon(Icons.send, color: Colors.black),
+                      icon: const Icon(Icons.send, color: Colors.black),
                       onPressed: _sendMessage,
                     ),
                   ],

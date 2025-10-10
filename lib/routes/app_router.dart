@@ -1,5 +1,8 @@
-import 'package:connectbeat/screens/topic_select_screen.dart';
 import 'package:flutter/material.dart';
+
+// ✅ 추가된 화면 import
+import 'package:connectbeat/screens/topic_select_screen.dart';
+import 'package:connectbeat/screens/character_screen.dart';
 
 // 화면 import
 import 'package:connectbeat/screens/login_screen.dart';
@@ -31,7 +34,7 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const CreateCodeScreen());
       case '/input-code':
         return MaterialPageRoute(builder: (_) => const InputCodeScreen());
-      case '/home-screen':
+      case '/home':
         return MaterialPageRoute(builder: (_) => const HomeScreen());
       case '/couple-date':
         return MaterialPageRoute(builder: (_) => const CoupleDateScreen());
@@ -40,14 +43,14 @@ class AppRouter {
       case '/create-chat':
         return MaterialPageRoute(builder: (_) => const CreateChatScreen());
 
-      // case '/invite-partner':
-      //   final args = settings.arguments as Map<String, dynamic>;
-      //   return MaterialPageRoute(
-      //     builder: (_) => InvitePartnerScreen(
-      //       chatSessionId: args['chatSessionId'],
-      //       inviteeId: args['inviteeId'],
-      //     ),
-      //   );
+    // case '/invite-partner':
+    //   final args = settings.arguments as Map<String, dynamic>;
+    //   return MaterialPageRoute(
+    //     builder: (_) => InvitePartnerScreen(
+    //       chatSessionId: args['chatSessionId'],
+    //       inviteeId: args['inviteeId'],
+    //     ),
+    //   );
 
       case '/couple-manage':
         return MaterialPageRoute(builder: (_) => const CoupleManageScreen());
@@ -55,10 +58,14 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const MyProfileSettingScreen());
       case '/splash':
         return MaterialPageRoute(builder: (_) => const SplashScreen());
-      case '/main-screen':
+      case '/main':
         return MaterialPageRoute(builder: (_) => const MainScreen());
       case '/emotion-result':
         return MaterialPageRoute(builder: (_) => const EmotionResultScreen());
+
+    // ✅ 둘 다 유지: 캐릭터 & 주제 선택
+      case '/character':
+        return MaterialPageRoute(builder: (_) => const CharacterScreen());
       // case '/topic-select':
       //   return MaterialPageRoute(builder: (_) => const TopicSelectScreen());
 
@@ -67,8 +74,8 @@ class AppRouter {
         final args = settings.arguments as Map<String, dynamic>;
         return MaterialPageRoute(
           builder: (_) => ChatRoomScreen(
-            room: args['room'],
-            currentUserId: args['currentUserId'],
+            room: args['room'] as ChatRoom,
+            currentUserId: args['currentUserId'] as String,
           ),
         );
 
@@ -77,8 +84,8 @@ class AppRouter {
         final args = settings.arguments as Map<String, dynamic>;
         return MaterialPageRoute(
           builder: (_) => ProfileSetupScreen(
-            nickname: args['nickname'],
-            profileImageUrl: args['profileImageUrl'],
+            nickname: args['nickname'] as String,
+            profileImageUrl: args['profileImageUrl'] as String,
           ),
         );
 

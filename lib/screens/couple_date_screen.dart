@@ -82,13 +82,13 @@ class _CoupleDateScreenState extends ConsumerState<CoupleDateScreen> {
     });
   }
 
-  void _saveDate() {
+  Future<void> _saveDate() async {
     final selectedDate = DateTime(
       years[selectedYearIndex],
       months[selectedMonthIndex],
       days[selectedDayIndex],
     );
-    ref.read(coupleDateProvider.notifier).save(selectedDate);
+    await ref.read(coupleDateProvider.notifier).save(selectedDate);
     Navigator.pop(context);
   }
 
@@ -139,6 +139,8 @@ class _CoupleDateScreenState extends ConsumerState<CoupleDateScreen> {
     final size = MediaQuery.of(context).size;
     final horizontalPadding = size.width * 0.06;
 
+    final dDayText = ref.watch(coupleDateProvider.notifier).getDDayText();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -148,9 +150,9 @@ class _CoupleDateScreenState extends ConsumerState<CoupleDateScreen> {
             color: Colors.black,
           ),
         ),
-        backgroundColor: Colors.transparent, // 배경과 일체화
-        elevation: 0,                        // 그림자 제거
-        foregroundColor: Colors.black,       // 뒤로가기 버튼 색상
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.black,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios),
           onPressed: () => Navigator.pop(context),
@@ -172,12 +174,13 @@ class _CoupleDateScreenState extends ConsumerState<CoupleDateScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SizedBox(height: size.height * 0.2),
-                    const Text(
-                      '사귄 날짜를 선택해주세요',
-                      style: TextStyle(
+                    SizedBox(height: size.height * 0.15),
+                    Text(
+                      dDayText,
+                      style: const TextStyle(
                         fontFamily: 'GowunBatang',
-                        fontSize: 20,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
                         color: Colors.black,
                         shadows: [
                           Shadow(
