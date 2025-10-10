@@ -8,9 +8,9 @@ import 'package:connectbeat/providers/user_provider.dart';
 import 'package:connectbeat/widgets/bottom_bar.dart';
 import 'setting_screen.dart';
 import '../services/couple_service.dart';
-import 'chat_report_list_screen.dart'; // ✅ 추가
+import 'chat_report_list_screen.dart';
 
-// ✅ 커플 상태 Provider (API 실패 시 기본값 반환)
+/// ✅ 커플 상태 Provider (API 실패 시 기본값 반환)
 final coupleStatusProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   final couple = await CoupleService.fetchCoupleStatus();
   return couple ?? {'partnerNickname': '파트너 없음'};
@@ -85,7 +85,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             final screens = [
               ChatReportListScreen(coupleId: user['coupleId'] ?? 0), // index 0
               const CharacterScreen(), // index 1
-              SafeArea( // index 2
+              SafeArea( // index 2 (홈)
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Column(
@@ -140,7 +140,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                         ],
                       ),
+
+                      const SizedBox(height: 40),
+
+                      Center(
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.pushNamed(context, '/create-chat');
+                          },
+                          child: const Text(
+                            '오늘의 10분 대화 하러가기',
+                            style: TextStyle(
+                              fontFamily: 'GowunBatang',
+                              fontSize: 18,
+                              color: Colors.black,
+                              decoration: TextDecoration.underline,
+                              decorationColor: Colors.black,
+                            ),
+                          ),
+                        ),
+                      ),
+
                       const Spacer(),
+
                       Container(
                         margin: const EdgeInsets.only(bottom: 1),
                         height: 350,
