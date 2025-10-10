@@ -128,7 +128,7 @@ class AuthService {
     try {
       final headers = await buildAuthHeader();
       final response = await http.get(
-        Uri.parse('$baseUrl/api/couples/status'),
+        Uri.parse('$baseUrl/couples/status'),
         headers: headers,
       );
 

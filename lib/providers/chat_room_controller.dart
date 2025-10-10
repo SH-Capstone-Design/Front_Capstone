@@ -42,26 +42,30 @@ class ChatRoomState {
 class ChatRoomController extends Notifier<ChatRoomState> {
   late final ChatRepository _repo;
   StreamSubscription<ChatRoomEvent>? _eventSub;
+  bool _isDisposed = false; // ✅ 추가
 
   @override
   ChatRoomState build() {
     _repo = ref.read(chatRepositoryProvider);
+
+    // ✅ Notifier가 dispose될 때 실행할 정리 로직 등록
     ref.onDispose(() {
+      _isDisposed = true;
       _eventSub?.cancel();
     });
+
     return const ChatRoomState();
   }
 
-  /// ✅ 세션 생성 (REST: POST /api/chat/rooms)
   Future<void> startSession({required String userId}) async {
-    state = state.copyWith(creating: true, error: null);
+    if (_isDisposed) return;
 
+    state = state.copyWith(creating: true, error: null);
     try {
-      // 1️⃣ 세션 생성
       final room = await _repo.startSession();
+      if (_isDisposed) return;
       state = state.copyWith(creating: false, room: room);
 
-      // 2️⃣ WebSocket 연결 (STOMP)
       if (_repo is ChatRepositoryImpl) {
         final chatRepo = _repo as ChatRepositoryImpl;
         await chatRepo.connectSocket(
@@ -69,19 +73,21 @@ class ChatRoomController extends Notifier<ChatRoomState> {
           userId: userId,
         );
 
-        // 3️⃣ 이벤트 구독 시작 (파라미터 없음)
         _eventSub?.cancel();
-        _eventSub = chatRepo.subscribeEvents().listen((event) {
+        _eventSub = chatRepo.subscribeEvents(room.chatSessionId).listen((event) {
+          if (_isDisposed) return;
           state = state.copyWith(events: [...state.events, event]);
         });
       }
     } catch (e) {
+      if (_isDisposed) return;
       state = state.copyWith(creating: false, error: e.toString());
     }
   }
 
-  /// ✅ 세션 종료 (REST + 소켓 종료)
   Future<void> closeSession() async {
+    if (_isDisposed) return;
+
     final room = state.room;
     if (room == null) return;
 
@@ -90,16 +96,18 @@ class ChatRoomController extends Notifier<ChatRoomState> {
       _eventSub?.cancel();
       state = const ChatRoomState();
     } catch (e) {
+      if (_isDisposed) return;
       state = state.copyWith(error: e.toString());
     }
   }
 
-  /// ✅ 상태 초기화
   void clear() {
+    if (_isDisposed) return;
     _eventSub?.cancel();
     state = const ChatRoomState();
   }
 }
+
 
 /// ✅ Provider 등록
 final chatRoomControllerProvider =

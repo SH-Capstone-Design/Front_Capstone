@@ -66,7 +66,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     });
 
     // 3️⃣ 이벤트 스트림 구독
-    _eventSub = repo.subscribeEvents().listen((event) {
+    _eventSub = repo.subscribeEvents(widget.room.chatSessionId).listen((event) {
       switch (event.eventType) {
         case "USER_JOINED":
           _addSystemMessage("상대방이 입장했습니다.");
@@ -183,10 +183,21 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     _scrollController.dispose();
     _messageSub?.cancel();
     _eventSub?.cancel();
-    final socketCtrl = ref.read(chatSocketControllerProvider.notifier);
-    socketCtrl.disconnect(widget.room.chatSessionId);
+
+    try {
+      // ✅ dispose 시점에 안전하게 새 ProviderContainer로 접근
+      final container = ProviderContainer();
+      final socketCtrl = container.read(chatSocketControllerProvider.notifier);
+      socketCtrl.disconnect(widget.room.chatSessionId);
+      container.dispose(); // 리소스 정리
+    } catch (e, st) {
+      debugPrint("⚠️ dispose 중 socket disconnect 실패: $e\n$st");
+    }
+
     super.dispose();
   }
+
+
 
   @override
   Widget build(BuildContext context) {
