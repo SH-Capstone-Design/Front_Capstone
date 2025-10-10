@@ -2,7 +2,6 @@ import 'package:connectbeat/services/auth_service.dart';
 import 'package:connectbeat/services/chat_repository_impl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/widgets/rounded_button.dart';
 import 'package:connectbeat/providers/chat_repository_provider.dart';
 import 'package:connectbeat/providers/current_user_provider.dart';
@@ -35,14 +34,16 @@ class CreateChatScreen extends ConsumerWidget {
             child: Column(
               children: [
                 SizedBox(height: size.height * 0.1),
+
                 Center(
                   child: Image.asset(
-                    AppConstants.logoPath,
-                    height: 60,
+                    'assets/images/ConnectBeat_Chat.gif',
+                    height: 250,
                     fit: BoxFit.contain,
                   ),
                 ),
-                const SizedBox(height: 60),
+
+                const SizedBox(height: 50),
 
                 // ✅ 채팅방 생성 버튼
                 Padding(

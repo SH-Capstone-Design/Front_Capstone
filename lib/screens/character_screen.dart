@@ -42,7 +42,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
       }
     });
 
-    _handTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+    _handTimer = Timer.periodic(const Duration(milliseconds: 450), (timer) {
       if (!mounted) return;
       setState(() {
         _handIndex = (_handIndex + 1) % _handImages.length;

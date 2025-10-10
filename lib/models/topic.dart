@@ -1,5 +1,6 @@
 // lib/models/topic.dart
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:json_annotation/json_annotation.dart';
 
 part 'topic.freezed.dart';
 part 'topic.g.dart';
