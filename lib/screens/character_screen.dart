@@ -11,7 +11,6 @@ class CharacterScreen extends StatefulWidget {
 }
 
 class _CharacterScreenState extends State<CharacterScreen> {
-  // 현재 선택된 옷 카테고리
   String selectedCategory = '상의';
   final List<String> categories = ['상의', '하의'];
 
@@ -35,7 +34,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
     // 처음에 캐릭터 기본 이미지로 고정
     _handIndex = 0;
 
-    // context가 준비된 뒤에 이미지 미리 로드
     WidgetsBinding.instance.addPostFrameCallback((_) {
       for (var imagePath in _handImages) {
         precacheImage(AssetImage(imagePath), context);
@@ -50,33 +48,90 @@ class _CharacterScreenState extends State<CharacterScreen> {
     });
   }
 
-
-
-
   @override
   void dispose() {
     _handTimer.cancel();
     super.dispose();
   }
 
+  // ✅ 커스텀 다이얼로그
+  Future<void> _showPurchaseDialog(String itemName) async {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        elevation: 10,
+        backgroundColor: Colors.white,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          width: 300,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '구매 확인',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontFamily: 'GowunBatang',
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '$itemName을(를) 구매하시겠습니까?',
+                style: const TextStyle(
+                    fontSize: 18,
+                    fontFamily: 'GowunBatang',
+                    color: Colors.black87),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Expanded(
+                    child: RoundedButton(
+                      text: '취소',
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: RoundedButton(
+                      text: '확인',
+                      onPressed: () {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('$itemName 구매 완료!')),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // ✅ 배경 이미지
         SizedBox.expand(
           child: Image.asset(
             AppConstants.backgroundPath,
             fit: BoxFit.cover,
           ),
         ),
-        // SafeArea + 화면 내용
         SafeArea(
           child: Column(
             children: [
               const SizedBox(height: 20),
-
-              // ✅ 상단 코인 표시 (왼쪽)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
@@ -100,10 +155,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 16),
-
-              // ✅ 화면 상단 제목
               const Text(
                 '캐릭터 꾸미기',
                 style: TextStyle(
@@ -114,8 +166,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-
-              // 상단 캐릭터 이미지 (손 흔드는 애니메이션)
               Expanded(
                 flex: 5,
                 child: Center(
@@ -125,8 +175,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
                   ),
                 ),
               ),
-
-              // ✅ 옷 카테고리 선택 (RoundedButton 사용)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
@@ -148,17 +196,15 @@ class _CharacterScreenState extends State<CharacterScreen> {
                   }).toList(),
                 ),
               ),
-
               const SizedBox(height: 8),
-
-              // 하단 옷장
               Expanded(
                 flex: 4,
                 child: Container(
-                  color: Colors.white.withOpacity(0.2), // 반투명 배경
+                  color: Colors.white.withOpacity(0.2),
                   padding: const EdgeInsets.all(8),
                   child: GridView.builder(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate:
+                    const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 3,
                       crossAxisSpacing: 8,
                       mainAxisSpacing: 8,
@@ -166,9 +212,13 @@ class _CharacterScreenState extends State<CharacterScreen> {
                     ),
                     itemCount: 6,
                     itemBuilder: (context, index) {
-                      return Container(
-                        color: Colors.pinkAccent.withOpacity(0.5),
-                        child: Center(child: Text('$selectedCategory ${index + 1}')),
+                      final itemName = '$selectedCategory ${index + 1}';
+                      return GestureDetector(
+                        onTap: () => _showPurchaseDialog(itemName),
+                        child: Container(
+                          color: Colors.pinkAccent.withOpacity(0.5),
+                          child: Center(child: Text(itemName)),
+                        ),
                       );
                     },
                   ),

@@ -40,8 +40,8 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const CoupleDateScreen());
       case '/setting':
         return MaterialPageRoute(builder: (_) => const SettingScreen());
-      case '/create-chat':
-        return MaterialPageRoute(builder: (_) => const CreateChatScreen());
+      // case '/create-chat':
+      //   return MaterialPageRoute(builder: (_) => const CreateChatScreen());
 
     // case '/invite-partner':
     //   final args = settings.arguments as Map<String, dynamic>;
@@ -66,8 +66,8 @@ class AppRouter {
     // ✅ 둘 다 유지: 캐릭터 & 주제 선택
       case '/character':
         return MaterialPageRoute(builder: (_) => const CharacterScreen());
-      // case '/topic-select':
-      //   return MaterialPageRoute(builder: (_) => const TopicSelectScreen());
+    case '/topic-select':
+      return MaterialPageRoute(builder: (_) => const TopicSelectScreen());
 
     // ✅ 채팅방 화면 라우트
       case '/chat':
@@ -80,7 +80,7 @@ class AppRouter {
         );
 
     // ✅ 프로필 설정 화면 라우트
-      case '/profile_setup':
+      case '/profile-setup':
         final args = settings.arguments as Map<String, dynamic>;
         return MaterialPageRoute(
           builder: (_) => ProfileSetupScreen(

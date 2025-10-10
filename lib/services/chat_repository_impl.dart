@@ -1,4 +1,3 @@
-// lib/services/chat_repository_impl.dart
 import 'dart:async';
 import 'package:connectbeat/models/chat_room.dart';
 import 'package:connectbeat/models/chat_message.dart';
@@ -6,8 +5,11 @@ import 'package:connectbeat/models/chat_room_event.dart';
 import 'package:connectbeat/services/chat_repository.dart';
 import 'package:connectbeat/services/chat_api_service.dart';
 
-/// 소켓 추상화 인터페이스
+/// =======================
+/// 🔌 ChatSocketPort (WebSocket 추상화)
+/// =======================
 abstract class ChatSocketPort {
+  /// ✅ 서버와 STOMP/WebSocket 연결
   Future<void> connect({
     required void Function(Map<String, dynamic>) onRoomEvent,
     required void Function(Map<String, dynamic>) onPersonalEvent,
@@ -15,30 +17,37 @@ abstract class ChatSocketPort {
     required String userId,
   });
 
+  /// ✅ 채팅 메시지 전송 (/app/chat/message)
   void sendMessage({
     required String chatSessionId,
     required String senderId,
     required String content,
   });
 
+  /// ✅ 초대 전송 (/app/chat/invite)
   void sendInvite({
     required String chatSessionId,
     required String inviteeId,
   });
 
+  /// ✅ 참여 전송 (/app/chat/join)
   void sendJoin({
     required String chatSessionId,
   });
 
+  /// ✅ 주제 선택 전송 (/app/chat/category-select)
   void sendCategorySelect({
     required String chatSessionId,
     required int categoryId,
   });
 
+  /// ✅ 연결 종료
   void disconnect();
 }
 
-/// ChatRepository 구현체
+/// =======================
+/// 💬 ChatRepository 구현체
+/// =======================
 class ChatRepositoryImpl implements ChatRepository {
   final ChatApiService api;
   final ChatSocketPort socket;
@@ -53,13 +62,13 @@ class ChatRepositoryImpl implements ChatRepository {
     required this.socket,
   });
 
-  // ✅ 세션 생성 (REST)
+  /// ✅ 세션 생성 (REST: POST /api/chat/rooms)
   @override
   Future<ChatRoom> startSession() async {
     return await api.startSession();
   }
 
-  // ✅ 소켓 연결 및 구독 시작
+  /// ✅ WebSocket 연결
   Future<void> connectSocket({
     required String chatSessionId,
     required String userId,
@@ -72,7 +81,6 @@ class ChatRepositoryImpl implements ChatRepository {
       userId: userId,
       onRoomEvent: (data) {
         try {
-          // eventType이 있으면 ChatRoomEvent, 없으면 ChatMessage
           if (data.containsKey("eventType")) {
             final event = ChatRoomEvent.fromJson(data);
             _eventController.add(event);
@@ -93,7 +101,6 @@ class ChatRepositoryImpl implements ChatRepository {
 
             if (event.eventType == "INVITATION") {
               print("📨 초대장 수신: ${event.payload}");
-              // TODO: 필요 시 UI에서 자동 입장 로직 처리 가능
             }
           }
         } catch (e) {
@@ -103,18 +110,19 @@ class ChatRepositoryImpl implements ChatRepository {
     );
   }
 
-  // ✅ 메시지 스트림 구독
+  /// ✅ 메시지 스트림 구독
   @override
   Stream<ChatMessage> subscribeMessages(String chatSessionId) {
     return _messageController.stream;
   }
 
-  // ✅ 이벤트 스트림 구독
-  Stream<ChatRoomEvent> subscribeEvents() {
+  /// ✅ 이벤트 스트림 구독
+  @override
+  Stream<ChatRoomEvent> subscribeEvents(String chatSessionId) {
     return _eventController.stream;
   }
 
-  // ✅ 메시지 전송
+  /// ✅ 메시지 전송
   @override
   Future<void> sendMessage({
     required String chatSessionId,
@@ -128,7 +136,7 @@ class ChatRepositoryImpl implements ChatRepository {
     );
   }
 
-  // ✅ 초대 전송
+  /// ✅ 초대 전송
   Future<void> sendInvite({
     required String chatSessionId,
     required String inviteeId,
@@ -139,14 +147,15 @@ class ChatRepositoryImpl implements ChatRepository {
     );
   }
 
-  // ✅ 참여 전송
+  /// ✅ 참여 전송
   Future<void> sendJoin({
     required String chatSessionId,
   }) async {
     socket.sendJoin(chatSessionId: chatSessionId);
   }
 
-  // ✅ 주제 선택
+  /// ✅ 주제 선택 전송
+  @override
   Future<void> sendCategorySelect({
     required String chatSessionId,
     required int categoryId,
@@ -157,20 +166,34 @@ class ChatRepositoryImpl implements ChatRepository {
     );
   }
 
-  // ✅ 세션 종료 (REST)
+  /// ✅ 세션 종료 (REST)
   @override
   Future<void> closeSession(String chatSessionId) async {
     await api.closeSession(chatSessionId);
     disconnect();
   }
 
+  /// ✅ 연결 종료 및 Stream 닫기
+  bool _isDisposed = false;
+
   void disconnect() {
-    socket.disconnect();
-    _connected = false;
+    if (_isDisposed) {
+      print("⚠️ 이미 dispose된 ChatRepositoryImpl. 중복 disconnect 무시");
+      return;
+    }
+    _isDisposed = true;
 
-    if (!_messageController.isClosed) _messageController.close();
-    if (!_eventController.isClosed) _eventController.close();
+    try {
+      socket.disconnect();
+      _connected = false;
 
-    print("🔌 ChatRepositoryImpl: WebSocket 연결 종료 및 StreamController 닫힘");
+      if (!_messageController.isClosed) _messageController.close();
+      if (!_eventController.isClosed) _eventController.close();
+
+      print("🔌 ChatRepositoryImpl: WebSocket 연결 종료 및 StreamController 닫힘");
+    } catch (e, st) {
+      print("⚠️ disconnect 중 오류 발생: $e");
+      print(st);
+    }
   }
 }
