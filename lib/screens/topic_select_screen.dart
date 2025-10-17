@@ -1,15 +1,11 @@
-// lib/screens/topic_select_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectbeat/providers/topic_provider.dart';
-import 'package:connectbeat/providers/chat_repository_provider.dart';
 import 'package:connectbeat/providers/current_user_provider.dart';
+import 'package:connectbeat/providers/chat_room_controller.dart';
 import 'package:connectbeat/providers/session_provider.dart';
 import 'package:connectbeat/services/auth_service.dart';
 import 'package:connectbeat/models/chat_room.dart';
-import 'package:connectbeat/models/chat_message.dart';
-import 'package:connectbeat/models/chat_room_event.dart';
-import 'package:connectbeat/services/chat_repository_impl.dart';
 
 class TopicSelectScreen extends ConsumerWidget {
   const TopicSelectScreen({super.key});
@@ -58,7 +54,7 @@ class TopicSelectScreen extends ConsumerWidget {
                         ),
                       ),
                       trailing: isSelected
-                          ? const Icon(Icons.check_circle, color: const Color(0xFFFFEEFF))
+                          ? const Icon(Icons.check_circle, color: Color(0xFFFFEEFF))
                           : const Icon(Icons.circle_outlined, color: Colors.grey),
                       onTap: () {
                         ref.read(selectedCategoryProvider.notifier).state = category;
@@ -68,18 +64,17 @@ class TopicSelectScreen extends ConsumerWidget {
                 ),
               ),
 
-              // ✅ "대화 시작" 버튼 (테스트용 항상 활성화)
+              // ✅ "대화 시작" 버튼
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 16),
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFFEEFF),
+                    backgroundColor: Colors.pinkAccent,
                     minimumSize: const Size(double.infinity, 48),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  // ✅ 테스트용으로 null 조건 제거
                   onPressed: () async {
                     try {
                       // 🔐 로그인 확인
@@ -93,59 +88,48 @@ class TopicSelectScreen extends ConsumerWidget {
                         return;
                       }
 
+                      // ✅ 사용자 정보
                       final userId = ref.read(currentUserProvider);
-                      final chatRepo = ref.read(chatRepositoryProvider);
-                      final sessionCtrl = ref.read(sessionControllerProvider.notifier);
-
-                      // ✅ 세션 생성
-                      final ChatRoom room = await chatRepo.startSession();
-                      debugPrint("✅ 세션 생성 성공: ${room.chatSessionId}");
-
-                      // ✅ 전역 세션 저장
-                      sessionCtrl.setSession(room.chatSessionId);
-
-                      // ✅ 메시지 구독
-                      chatRepo.subscribeMessages(room.chatSessionId).listen(
-                            (ChatMessage msg) {
-                          debugPrint("📩 메시지 수신: ${msg.content}");
-                        },
-                      );
-
-                      // ✅ 이벤트 구독
-                      if (chatRepo is ChatRepositoryImpl) {
-                        chatRepo
-                            .subscribeEvents(room.chatSessionId)
-                            .listen((ChatRoomEvent event) {
-                          debugPrint("📡 이벤트 수신: ${event.eventType}");
-
-                          if (event.eventType == "CONVERSATION_ENDED") {
-                            if (context.mounted) {
-                              sessionCtrl.clearSession();
-                              Navigator.pushReplacementNamed(
-                                context,
-                                '/analysis',
-                                arguments: {'sessionId': room.chatSessionId},
-                              );
-                            }
-                          }
-
-                          if (event.eventType == "CONVERSATION_STARTED") {
-                            final topic = event.payload?['topic'] ?? "주제가 선택되었습니다.";
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('주제: $topic')),
-                            );
-                          }
-                        });
+                      if (userId == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("사용자 정보 불러오기 실패")),
+                        );
+                        return;
                       }
 
-                      // ✅ 테스트용: 카테고리 없으면 임시 ID 사용
-                      final categoryId =
-                          selectedCategory?.categoryId ?? 1; // 기본값 1
+                      // ✅ partnerId (커플 상대 ID)
+                      final partnerId =
+                          ref.read(sessionControllerProvider.notifier).partnerId ?? "unknown";
 
-                      chatRepo.sendCategorySelect(
-                        chatSessionId: room.chatSessionId,
-                        categoryId: categoryId,
+                      // ✅ ChatRoomController 사용
+                      final chatCtrl =
+                      ref.read(chatRoomControllerProvider.notifier);
+
+                      await chatCtrl.startSession(
+                        userId: userId,
+                        partnerId: partnerId,
                       );
+
+                      final room = ref.read(chatRoomControllerProvider).room;
+                      if (room == null) {
+                        throw Exception("세션 생성 실패");
+                      }
+
+                      debugPrint("✅ 세션 생성 완료 및 초대 발송: ${room.chatSessionId}");
+
+                      // ✅ 주제 선택 전송
+                      final categoryId = selectedCategory?.categoryId ?? 1;
+                      final topicName = selectedCategory?.name ?? "테스트 주제";
+
+                      final repo = ref.read(chatRoomControllerProvider.notifier);
+                      final repoState = ref.read(chatRoomControllerProvider);
+                      if (repoState.room != null) {
+                        await chatCtrl.sendCategorySelect(
+                          chatSessionId: repoState.room!.chatSessionId,
+                          categoryId: categoryId,
+                        );
+                      }
+
 
                       // ✅ 채팅방으로 이동
                       if (context.mounted) {
@@ -154,16 +138,16 @@ class TopicSelectScreen extends ConsumerWidget {
                           '/chat',
                           arguments: {
                             'room': room,
-                            'topic': selectedCategory?.name ?? "테스트 주제",
-                            'currentUserId': userId ?? "unknown",
+                            'topic': topicName,
+                            'currentUserId': userId,
                           },
                         );
                       }
                     } catch (e) {
-                      debugPrint("❌ 세션 생성 실패: $e");
+                      debugPrint("❌ 대화 시작 실패: $e");
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('채팅방 생성 실패: $e')),
+                          SnackBar(content: Text('대화 시작 실패: $e')),
                         );
                       }
                     }
