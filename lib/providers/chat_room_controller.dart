@@ -42,13 +42,12 @@ class ChatRoomState {
 class ChatRoomController extends Notifier<ChatRoomState> {
   late final ChatRepository _repo;
   StreamSubscription<ChatRoomEvent>? _eventSub;
-  bool _isDisposed = false; // ✅ 추가
+  bool _isDisposed = false;
 
   @override
   ChatRoomState build() {
     _repo = ref.read(chatRepositoryProvider);
 
-    // ✅ Notifier가 dispose될 때 실행할 정리 로직 등록
     ref.onDispose(() {
       _isDisposed = true;
       _eventSub?.cancel();
@@ -57,15 +56,21 @@ class ChatRoomController extends Notifier<ChatRoomState> {
     return const ChatRoomState();
   }
 
-  Future<void> startSession({required String userId}) async {
+  /// ✅ 세션 생성 + 자동 초대
+  Future<void> startSession({
+    required String userId,
+    required String partnerId, // 👈 초대할 상대방 ID 추가
+  }) async {
     if (_isDisposed) return;
 
     state = state.copyWith(creating: true, error: null);
     try {
+      // 1️⃣ 세션 생성 (REST)
       final room = await _repo.startSession();
       if (_isDisposed) return;
       state = state.copyWith(creating: false, room: room);
 
+      // 2️⃣ WebSocket 연결
       if (_repo is ChatRepositoryImpl) {
         final chatRepo = _repo as ChatRepositoryImpl;
         await chatRepo.connectSocket(
@@ -73,18 +78,29 @@ class ChatRoomController extends Notifier<ChatRoomState> {
           userId: userId,
         );
 
+        // 3️⃣ 상대방에게 초대 전송
+        await chatRepo.sendInvite(
+          chatSessionId: room.chatSessionId,
+          inviteeId: partnerId,
+        );
+        print("💌 초대 전송 완료 → 상대방: $partnerId");
+
+        // 4️⃣ 이벤트 구독
         _eventSub?.cancel();
-        _eventSub = chatRepo.subscribeEvents(room.chatSessionId).listen((event) {
-          if (_isDisposed) return;
-          state = state.copyWith(events: [...state.events, event]);
-        });
+        _eventSub =
+            chatRepo.subscribeEvents(room.chatSessionId).listen((event) {
+              if (_isDisposed) return;
+              state = state.copyWith(events: [...state.events, event]);
+            });
       }
     } catch (e) {
       if (_isDisposed) return;
+      print("❌ startSession 오류: $e");
       state = state.copyWith(creating: false, error: e.toString());
     }
   }
 
+  /// ✅ 세션 종료
   Future<void> closeSession() async {
     if (_isDisposed) return;
 
@@ -101,13 +117,25 @@ class ChatRoomController extends Notifier<ChatRoomState> {
     }
   }
 
+  Future<void> sendCategorySelect({
+    required String chatSessionId,
+    required int categoryId,
+  }) async {
+    if (_isDisposed) return;
+    await _repo.sendCategorySelect(
+      chatSessionId: chatSessionId,
+      categoryId: categoryId,
+    );
+  }
+
+
+  /// ✅ 상태 초기화
   void clear() {
     if (_isDisposed) return;
     _eventSub?.cancel();
     state = const ChatRoomState();
   }
 }
-
 
 /// ✅ Provider 등록
 final chatRoomControllerProvider =

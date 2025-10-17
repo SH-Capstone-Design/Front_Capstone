@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:connectbeat/models/chat_room.dart';
 import 'package:connectbeat/models/chat_message.dart';
 import 'package:connectbeat/models/chat_room_event.dart';
@@ -56,6 +57,7 @@ class ChatRepositoryImpl implements ChatRepository {
   final _eventController = StreamController<ChatRoomEvent>.broadcast();
 
   bool _connected = false;
+  bool _isDisposed = false;
 
   ChatRepositoryImpl({
     required this.api,
@@ -93,14 +95,20 @@ class ChatRepositoryImpl implements ChatRepository {
           print("⚠️ onRoomEvent 처리 실패: $e");
         }
       },
-      onPersonalEvent: (data) {
+      onPersonalEvent: (data) async {
         try {
-          if (data.containsKey("eventType")) {
-            final event = ChatRoomEvent.fromJson(data);
-            _eventController.add(event);
+          if (!data.containsKey("eventType")) return;
+          final event = ChatRoomEvent.fromJson(data);
+          _eventController.add(event);
 
-            if (event.eventType == "INVITATION") {
-              print("📨 초대장 수신: ${event.payload}");
+          // ✅ 초대 수신 시 자동 참가 로직
+          if (event.eventType == "INVITATION") {
+            final chatSessionId = event.payload['chatSessionId'] as String?;
+            if (chatSessionId != null) {
+              print("📨 초대 수신 → 자동 참가 시도: $chatSessionId");
+              await sendJoin(chatSessionId: chatSessionId);
+            } else {
+              print("⚠️ 초대 이벤트 payload에 chatSessionId 없음: ${event.payload}");
             }
           }
         } catch (e) {
@@ -141,6 +149,7 @@ class ChatRepositoryImpl implements ChatRepository {
     required String chatSessionId,
     required String inviteeId,
   }) async {
+    print("📤 초대 전송: $inviteeId");
     socket.sendInvite(
       chatSessionId: chatSessionId,
       inviteeId: inviteeId,
@@ -151,6 +160,7 @@ class ChatRepositoryImpl implements ChatRepository {
   Future<void> sendJoin({
     required String chatSessionId,
   }) async {
+    print("📤 자동 참여 전송: $chatSessionId");
     socket.sendJoin(chatSessionId: chatSessionId);
   }
 
@@ -174,8 +184,6 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   /// ✅ 연결 종료 및 Stream 닫기
-  bool _isDisposed = false;
-
   void disconnect() {
     if (_isDisposed) {
       print("⚠️ 이미 dispose된 ChatRepositoryImpl. 중복 disconnect 무시");
