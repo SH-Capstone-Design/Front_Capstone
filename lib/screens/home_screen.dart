@@ -17,10 +17,8 @@ import 'chat_report_list_screen.dart';
 /// ✅ 커플 상태 Provider
 final coupleStatusProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   final couple = await CoupleService.fetchCoupleStatus();
-  // ✅ 커플 상태가 존재하고 partnerId가 있으면 SessionController에 저장
   if (couple != null && couple['partnerId'] != null) {
-    ref.read(sessionControllerProvider.notifier)
-        .setPartner(couple['partnerId']);
+    ref.read(sessionControllerProvider.notifier).setPartner(couple['partnerId']);
   }
   return couple ?? {'partnerNickname': '파트너 없음'};
 });
@@ -36,35 +34,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 2;
   late PageController _pageController;
   late Timer _blinkTimer;
-  bool _isEyeOpen = true;
+  late Timer _chatImageTimer;
 
+  bool _isEyeOpen = true;
   final List<String> _eyeImages = [
     'assets/images/ConnectBeatCharacter.png',
     'assets/images/ConnectBeatCharacter2.png',
   ];
+
+  final List<String> _chatImages = [
+    'assets/images/Chat1.png',
+    'assets/images/Chat2.png',
+    'assets/images/Chat3.png',
+  ];
+  int _currentChatImageIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: _currentIndex);
 
-    // ✅ 1️⃣ 유저 정보 불러오기
+    // 1️⃣ 유저 정보 로드
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(userProvider.notifier).fetchUser();
     });
 
-    // ✅ 2️⃣ STOMP 개인 큐 연결 (초대 수신 대기)
+    // 2️⃣ STOMP 개인 큐 연결
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final repo = ref.read(chatRepositoryProvider);
       try {
         await repo.connectBase();
-        debugPrint("✅ 개인 큐 연결 완료 (초대 수신 대기 중)");
+        debugPrint("✅ 개인 큐 연결 완료");
       } catch (e) {
         debugPrint("❌ 개인 큐 연결 실패: $e");
       }
     });
 
-    // ✅ 3️⃣ 캐릭터 눈 깜빡임 애니메이션
+    // 3️⃣ 캐릭터 눈 깜빡임 애니메이션
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       for (var imagePath in _eyeImages) {
         await precacheImage(AssetImage(imagePath), context);
@@ -74,16 +80,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         setState(() => _isEyeOpen = !_isEyeOpen);
       });
     });
+
+    // 4️⃣ 10분 대화 이미지 사이클
+    _chatImageTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (!mounted) return;
+      setState(() {
+        _currentChatImageIndex = (_currentChatImageIndex + 1) % _chatImages.length;
+      });
+    });
   }
 
   @override
   void dispose() {
     _pageController.dispose();
     _blinkTimer.cancel();
+    _chatImageTimer.cancel();
     super.dispose();
   }
 
-  /// ✅ 대화 세션 생성 및 채팅방 이동 (A측)
+  /// ✅ 대화 세션 생성 및 채팅방 이동
   Future<void> _startChat(BuildContext context, String userId, String partnerId) async {
     final repo = ref.read(chatRepositoryProvider);
     final sessionCtrl = ref.read(sessionControllerProvider.notifier);
@@ -96,31 +111,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     try {
-      // 1️⃣ 세션 생성 (POST /api/chat/rooms)
       final ChatRoom room = await repo.startSession();
-      sessionCtrl.setSession(room.chatSessionId); // ✅ 세션ID 저장
-      debugPrint("✅ 세션 생성 완료: ${room.chatSessionId}");
-
-      // 2️⃣ 방 구독 (/topic/chat/room/{id})
+      sessionCtrl.setSession(room.chatSessionId);
       await repo.subscribeRoom(chatSessionId: room.chatSessionId);
-      debugPrint("✅ 방 구독 완료: ${room.chatSessionId}");
+      await repo.sendInvite(chatSessionId: room.chatSessionId, inviteeId: partnerId);
 
-      // 3️⃣ 초대 전송 (/app/chat/invite)
-      await repo.sendInvite(
-        chatSessionId: room.chatSessionId,
-        inviteeId: partnerId,
-      );
-      debugPrint("💌 초대 전송 완료 → $partnerId");
-
-      // 4️⃣ 채팅방 화면으로 이동
       if (context.mounted) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => ChatRoomScreen(
-              room: room,
-              currentUserId: userId,
-            ),
+            builder: (_) => ChatRoomScreen(room: room, currentUserId: userId),
           ),
         );
       }
@@ -146,10 +146,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           data: (couple) {
             final partnerNickname = couple['partnerNickname'] ?? '파트너 없음';
             final userId = user['userId'] ?? "unknown";
-
-            // ✅ SessionController에서 partnerId 읽기
-            final sessionState = ref.watch(sessionControllerProvider);
-            final partnerId = sessionState.partnerId ?? "unknown";
+            final partnerId = ref.watch(sessionControllerProvider).partnerId ?? "unknown";
 
             final screens = [
               ChatReportListScreen(coupleId: user['coupleId'] ?? 0),
@@ -160,7 +157,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   child: Column(
                     children: [
                       const SizedBox(height: 40),
-                      // 🔹 상단 닉네임 & 커플 정보
+                      // 🔹 닉네임 & 커플 정보
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
@@ -194,8 +191,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          Image.asset('assets/images/ConnectBeat_coin.png',
-                              width: 30, height: 30),
+                          Image.asset('assets/images/ConnectBeat_coin.png', width: 30, height: 30),
                           const SizedBox(width: 8),
                           const Text(
                             '10 개',
@@ -208,27 +204,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 40),
-                      // ✅ 오늘의 10분 대화 버튼
-                      Center(
-                        child: GestureDetector(
-                          onTap: () => _startChat(context, userId, partnerId),
-                          child: const Text(
-                            '오늘의 10분 대화 하러가기',
-                            style: TextStyle(
-                              fontFamily: 'GowunBatang',
-                              fontSize: 18,
-                              color: Colors.black,
-                              decoration: TextDecoration.underline,
-                              decorationColor: Colors.black,
+                      const Spacer(flex: 2),
+
+                      // 🔹 오늘의 10분 대화 (이미지 + 버튼)
+                      Column(
+                        children: [
+                          GestureDetector(
+                            onTap: () => _startChat(context, userId, partnerId),
+                            child: Image.asset(
+                              _chatImages[_currentChatImageIndex],
+                              width: 120,
+                              height: 120,
+                              fit: BoxFit.contain,
                             ),
                           ),
-                        ),
+                          const SizedBox(height: 8),
+                          GestureDetector(
+                            onTap: () => _startChat(context, userId, partnerId),
+                            child: const Text(
+                              '10분 대화하기',
+                              style: TextStyle(
+                                fontFamily: 'GowunBatang',
+                                fontSize: 15,
+                                color: Colors.black,
+                                decoration: TextDecoration.underline,
+                                decorationColor: Colors.black,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const Spacer(),
+
+                      const Spacer(flex: 1),
                       // 🔹 캐릭터
                       Container(
-                        margin: const EdgeInsets.only(bottom: 1),
+                        margin: const EdgeInsets.only(bottom: 16),
                         height: 350,
                         child: Center(
                           child: Image.asset(
@@ -237,6 +247,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                         ),
                       ),
+                      const Spacer(flex: 1),
                     ],
                   ),
                 ),
@@ -256,9 +267,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   child: PageView(
                     controller: _pageController,
-                    onPageChanged: (index) {
-                      setState(() => _currentIndex = index);
-                    },
+                    onPageChanged: (index) => setState(() => _currentIndex = index),
                     children: screens,
                   ),
                 ),
@@ -276,16 +285,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             );
           },
-          loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-          error: (err, st) => const Scaffold(
-              body: Center(child: Text('커플 정보를 불러올 수 없습니다.'))),
+          loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+          error: (err, st) => const Scaffold(body: Center(child: Text('커플 정보를 불러올 수 없습니다.'))),
         );
       },
-      loading: () =>
-      const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (err, st) =>
-      const Scaffold(body: Center(child: Text('사용자 정보를 불러올 수 없습니다.'))),
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (err, st) => const Scaffold(body: Center(child: Text('사용자 정보를 불러올 수 없습니다.'))),
     );
   }
 }

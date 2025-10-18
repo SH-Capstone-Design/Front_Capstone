@@ -47,7 +47,7 @@ class ConnectBeatApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         scaffoldBackgroundColor: const Color(0xFFFFF8FC),
-        fontFamily: 'Pretendard',
+        fontFamily: 'GowunBatang',
         textTheme: const TextTheme(
           bodyMedium: TextStyle(color: Colors.black),
         ),

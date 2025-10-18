@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 // ✅ 추가된 화면 import
-import 'package:connectbeat/screens/topic_select_screen.dart';
 import 'package:connectbeat/screens/character_screen.dart';
 
 // 화면 import
