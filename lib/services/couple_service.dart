@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class CoupleService {
-  // .env에 BASE_URL=http://... 이런 식으로 저장해둔다고 가정
   static final String _baseUrl = dotenv.env['BASE_URL'] ?? "";
 
   /// 커플 상태 조회
