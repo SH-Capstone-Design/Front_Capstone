@@ -1,3 +1,4 @@
+// lib/screens/chat_room_screen.dart
 import 'dart:async';
 import 'package:connectbeat/models/chat_room.dart';
 import 'package:connectbeat/models/chat_message.dart';
@@ -13,11 +14,13 @@ import '../providers/chat_repository_provider.dart';
 class ChatRoomScreen extends ConsumerStatefulWidget {
   final ChatRoom room;
   final String currentUserId;
+  final bool autoStart;
 
   const ChatRoomScreen({
     super.key,
     required this.room,
     required this.currentUserId,
+    this.autoStart = true,
   });
 
   @override
@@ -28,16 +31,17 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<Map<String, String>> _messages = [];
+  final Set<String> _messageCache = {}; // 중복 체크용
 
-  static const int _totalSeconds = 600; // 10분 타이머
+  static const int _totalSeconds = 600;
   late int _remainingSeconds;
   Timer? _timer;
   StreamSubscription<ChatMessage>? _messageSub;
   StreamSubscription<ChatRoomEvent>? _eventSub;
   bool _isDisposed = false;
 
-  bool _partnerJoined = false; // 상대방 입장 여부
-  bool _chatStarted = false; // 타이머 시작 여부
+  bool _partnerJoined = false;
+  bool _chatStarted = false;
 
   @override
   void initState() {
@@ -51,93 +55,92 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   }
 
   Future<void> _initializeChatFlow() async {
-    try {
-      final repo = ref.read(chatRepositoryProvider);
-      final partnerId =
-          ref.read(sessionControllerProvider.notifier).partnerId ?? "unknown";
-      final chatSessionId = widget.room.chatSessionId;
+    final repo = ref.read(chatRepositoryProvider);
+    final chatSessionId = widget.room.chatSessionId;
 
-      print("💬 Chat Flow Init → $chatSessionId / partner=$partnerId");
+    await repo.connectBase();
+    await repo.subscribeRoom(chatSessionId: chatSessionId);
 
-      // 1️⃣ 개인 큐 연결
-      await repo.connectBase();
-      print("✅ 개인 채널 연결 완료");
+    // 메시지 구독
+    _messageSub = repo.subscribeMessages(chatSessionId).listen((msg) {
+      if (_isDisposed) return;
 
-      // 2️⃣ 방 구독
-      await repo.subscribeRoom(chatSessionId: chatSessionId);
-      print("✅ 방 구독 완료");
+      final key = "${msg.senderId}-${msg.content}";
+      if (_messageCache.contains(key)) return; // 중복 방지
+      _messageCache.add(key);
 
-      // 3️⃣ 초대 전송
-      await repo.sendInvite(
-        chatSessionId: chatSessionId,
-        inviteeId: partnerId,
-      );
-      print("📨 초대 전송 완료 → $partnerId");
-
-      // 4️⃣ 이벤트 리스너
-      _eventSub = repo.subscribeEvents(chatSessionId).listen((event) {
-        if (_isDisposed) return;
-
-        switch (event.eventType) {
-          case "USER_JOINED":
-            _addSystemMessage("💞 상대방이 입장했습니다.");
-            _partnerJoined = true;
-            _tryStartChat();
-            break;
-          case "INVITATION":
-            _addSystemMessage("📩 상대방 초대가 도착했습니다.");
-            break;
-          case "CONVERSATION_STARTED":
-            _addSystemMessage("🗣️ 대화가 시작되었습니다.");
-            break;
-          case "CONVERSATION_ENDED":
-            _addSystemMessage("⏰ 대화가 종료되었습니다.");
-            _onSessionEnd();
-            break;
-          case "ERROR":
-            final msg = event.payload?["message"] ?? "알 수 없는 오류";
-            _addSystemMessage("⚠️ 오류: $msg");
-            break;
-        }
+      setState(() {
+        _messages.add({
+          "sender": msg.senderId == widget.currentUserId ? "me" : "partner",
+          "content": msg.content,
+          "time": TimeOfDay.now().format(context),
+        });
       });
+      _scrollToBottom();
+    });
 
-      // 5️⃣ 메시지 스트림 리스너
-      _messageSub =
-          repo.subscribeMessages(chatSessionId).listen((ChatMessage msg) {
-            if (_isDisposed) return;
-            setState(() {
-              _messages.add({
-                "sender": msg.senderId == widget.currentUserId ? "me" : "other",
-                "content": msg.content,
-                "time": TimeOfDay.now().format(context),
-              });
-            });
-            _scrollToBottom();
-          });
+    // 이벤트 구독
+    _eventSub = repo.subscribeEvents(chatSessionId).listen((event) {
+      if (_isDisposed) return;
 
-      print("✅ STOMP 연결 및 이벤트 구독 완료");
+      switch (event.eventType) {
+        case "CONVERSATION_STARTED":
+        // 상대방이 채팅 수락 후 시작 신호를 보내야 실행
+          _partnerJoined = true;
+          _tryStartChat();
+          break;
 
-    } catch (e) {
-      debugPrint("❌ 채팅 초기화 실패: $e");
+        case "USER_JOINED":
+        // 단순 입장 알림만
+          if (event.payload?['userId'] != widget.currentUserId) {
+            _addSystemMessage("💞 상대방이 채팅방에 입장했습니다.");
+          }
+          break;
+
+        case "CONVERSATION_ENDED":
+          _addSystemMessage("⏰ 대화가 종료되었습니다.");
+          _onSessionEnd();
+          break;
+
+        case "ERROR":
+          final msg = event.payload?["message"] ?? "알 수 없는 오류";
+          _addSystemMessage("⚠️ 오류: $msg");
+          break;
+      }
+    });
+
+    if (!widget.autoStart) {
+      await repo.sendJoin(chatSessionId: chatSessionId);
+      _partnerJoined = true;
+      _tryStartChat();
     }
   }
 
-  /// 둘 다 입장했으면 타이머 시작
   void _tryStartChat() {
-    if (!_chatStarted && _partnerJoined) {
+    if (_chatStarted) return;
+
+    // 둘 다 입장했을 때만 시작
+    if (_partnerJoined && widget.autoStart) {
       _chatStarted = true;
+      _addSystemMessage("🗣️ 대화가 시작되었습니다! 10분 타이머 작동 중.");
       _startTimer();
-      _addSystemMessage("⏰ 대화가 시작되었습니다! 10분 타이머 작동 중.");
+    } else if (_partnerJoined && !widget.autoStart) {
+      _chatStarted = true;
+      _addSystemMessage("🗣️ 대화가 시작되었습니다! 10분 타이머 작동 중.");
+      _startTimer(); // B도 타이머 시작
     }
   }
 
   void _startTimer() {
+    if (_timer != null) return; // 이미 타이머 실행 중이면 중복 방지
+
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_remainingSeconds <= 1) {
         timer.cancel();
+        _timer = null;
         if (mounted) {
           setState(() => _remainingSeconds = 0);
-          _onSessionEnd();
+          _onSessionEnd(navigateToResult: true);
         }
       } else {
         if (mounted) setState(() => _remainingSeconds--);
@@ -145,13 +148,12 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     });
   }
 
-  void _onSessionEnd() {
+  void _onSessionEnd({bool navigateToResult = false}) {
     if (!mounted || _isDisposed) return;
     _isDisposed = true;
 
-    final repo = ref.read(chatRepositoryProvider);
     try {
-      repo.disconnect();
+      ref.read(chatRepositoryProvider).disconnect();
     } catch (e) {
       debugPrint("⚠️ disconnect 중 오류: $e");
     }
@@ -160,17 +162,24 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       const SnackBar(content: Text("⏰ 채팅 세션이 종료되었습니다.")),
     );
 
+    if (navigateToResult) {
+      Navigator.pushReplacementNamed(context, '/emotion-result');
+      return;
+    }
+
     if (Navigator.canPop(context)) Navigator.pop(context);
   }
 
   void _sendMessage() {
-    if (!_chatStarted) return; // 둘 다 입장 전에는 전송 불가
+    if (!_chatStarted) return;
 
     final text = _controller.text.trim();
     if (text.isEmpty) return;
 
-    final repo = ref.read(chatRepositoryProvider);
-    repo.sendMessage(
+    final key = "${widget.currentUserId}-$text";
+    _messageCache.add(key); // 로컬 메시지 중복 등록 방지
+
+    ref.read(chatRepositoryProvider).sendMessage(
       chatSessionId: widget.room.chatSessionId,
       senderId: widget.currentUserId,
       content: text,
@@ -235,8 +244,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     _eventSub?.cancel();
 
     try {
-      final repo = ref.read(chatRepositoryProvider);
-      repo.disconnect();
+      ref.read(chatRepositoryProvider).disconnect();
     } catch (e) {
       debugPrint("⚠️ dispose 중 disconnect 실패: $e");
     }
@@ -380,7 +388,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                       child: TextField(
                         controller: _controller,
                         style: const TextStyle(fontFamily: 'GowunBatang'),
-                        enabled: _chatStarted, // 둘 다 입장 전에는 비활성화
+                        enabled: _chatStarted,
                         decoration: InputDecoration(
                           hintText: _chatStarted
                               ? "메시지를 입력하세요..."

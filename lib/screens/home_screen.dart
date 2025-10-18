@@ -1,3 +1,5 @@
+// lib/screens/home_screen.dart
+
 import 'dart:async';
 import 'package:connectbeat/models/chat_room.dart';
 import 'package:connectbeat/screens/chat_room_screen.dart';
@@ -49,6 +51,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   ];
   int _currentChatImageIndex = 0;
 
+  StreamSubscription? _eventSubscription;
+  bool _hasNavigatedToChat = false; // 중복 채팅방 이동 방지
+
   @override
   void initState() {
     super.initState();
@@ -59,12 +64,96 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ref.read(userProvider.notifier).fetchUser();
     });
 
-    // 2️⃣ STOMP 개인 큐 연결
+    // 2️⃣ STOMP 개인 큐 연결 및 이벤트 구독
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final repo = ref.read(chatRepositoryProvider);
       try {
         await repo.connectBase();
         debugPrint("✅ 개인 큐 연결 완료");
+
+        _eventSubscription = repo.eventStream.listen((event) async {
+          final userId = ref.read(userProvider).maybeWhen(
+            data: (u) => u['userId'] ?? "unknown",
+            orElse: () => "unknown",
+          );
+
+          // ✅ INVITATION 이벤트 → B만 처리
+          if (event.eventType == "INVITATION" &&
+              event.payload['chatSessionId'] != null &&
+              !_hasNavigatedToChat) {
+            final chatSessionId = event.payload['chatSessionId'] as String;
+            final inviterId = event.payload['inviterId'] as String?;
+
+            // 자신이 보낸 초대는 무시
+            if (inviterId == userId) return;
+
+            // 🔹 B에게 초대 다이얼로그 표시
+            if (context.mounted) {
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => AlertDialog(
+                  title: const Text("채팅 초대"),
+                  content: Text(
+                    "${event.payload['inviterName'] ?? '상대방'}님이 채팅을 초대했습니다.",
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context), // 거절
+                      child: const Text("거절"),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        Navigator.pop(context); // 다이얼로그 닫기
+
+                        final repo = ref.read(chatRepositoryProvider);
+
+                        // 구독/입장은 수락 시에만
+                        if (!repo.isSubscribed(chatSessionId)) {
+                          await repo.subscribeRoom(chatSessionId: chatSessionId);
+                          await repo.sendJoin(chatSessionId: chatSessionId);
+                        }
+
+                        if (context.mounted && !_hasNavigatedToChat) {
+                          _hasNavigatedToChat = true;
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ChatRoomScreen(
+                                room: ChatRoom(chatSessionId: chatSessionId),
+                                currentUserId: userId,
+                                autoStart: false, // B니까 타이머 X
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text("수락"),
+                    ),
+                  ],
+                ),
+              );
+            }
+          }
+
+          // ✅ CONVERSATION_STARTED 이벤트 → 둘 다 입장 시 처리
+          if (event.eventType == "CONVERSATION_STARTED" &&
+              event.chatSessionId != null &&
+              context.mounted &&
+              !_hasNavigatedToChat) {
+            _hasNavigatedToChat = true;
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChatRoomScreen(
+                  room: ChatRoom(chatSessionId: event.chatSessionId!),
+                  currentUserId: userId,
+                  autoStart: false, // ✅ 이벤트 수신자는 수락자처럼 행동
+                ),
+              ),
+            );
+          }
+        });
       } catch (e) {
         debugPrint("❌ 개인 큐 연결 실패: $e");
       }
@@ -85,7 +174,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _chatImageTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
       if (!mounted) return;
       setState(() {
-        _currentChatImageIndex = (_currentChatImageIndex + 1) % _chatImages.length;
+        _currentChatImageIndex =
+            (_currentChatImageIndex + 1) % _chatImages.length;
       });
     });
   }
@@ -95,44 +185,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _pageController.dispose();
     _blinkTimer.cancel();
     _chatImageTimer.cancel();
+    _eventSubscription?.cancel();
     super.dispose();
   }
 
-  /// ✅ 대화 세션 생성 또는 참여 및 채팅방 이동
-  Future<void> _startChat(BuildContext context, String userId, String partnerId) async {
+  /// ✅ 대화 세션 생성 또는 참여
+  Future<void> _startChat(
+      BuildContext context, String userId, String partnerId) async {
     final repo = ref.read(chatRepositoryProvider);
     final sessionCtrl = ref.read(sessionControllerProvider.notifier);
     final sessionState = ref.read(sessionControllerProvider);
 
     if (partnerId.isEmpty || partnerId == "unknown") {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("상대방 정보가 없습니다. 커플 연결을 먼저 완료하세요.")),
+        const SnackBar(
+            content: Text("상대방 정보가 없습니다. 커플 연결을 먼저 완료하세요.")),
       );
       return;
     }
 
     try {
-      // ✅ 이미 초대받은 세션이 있다면 (B측)
-      if (sessionState.chatSessionId != null && sessionState.chatSessionId!.isNotEmpty) {
+      // 기존 세션 존재 시 재입장
+      if (sessionState.chatSessionId != null &&
+          sessionState.chatSessionId!.isNotEmpty) {
         final chatSessionId = sessionState.chatSessionId!;
-        debugPrint("📥 기존 세션 참여 시도 → $chatSessionId");
+        if (!repo.isSubscribed(chatSessionId)) {
+          await repo.subscribeRoom(chatSessionId: chatSessionId);
+          await repo.sendJoin(chatSessionId: chatSessionId);
+        }
 
-        // 1️⃣ 세션 참여
-        await repo.joinRoom(chatSessionId);
-        debugPrint("✅ 세션 참여 성공: $chatSessionId");
-
-        // 2️⃣ 방 구독
-        await repo.subscribeRoom(chatSessionId: chatSessionId);
-        debugPrint("✅ 방 구독 완료: $chatSessionId");
-
-        // 3️⃣ 채팅방 이동
-        if (context.mounted) {
-          Navigator.push(
+        if (!_hasNavigatedToChat && context.mounted) {
+          _hasNavigatedToChat = true;
+          Navigator.pushReplacement(
             context,
             MaterialPageRoute(
               builder: (_) => ChatRoomScreen(
                 room: ChatRoom(chatSessionId: chatSessionId),
                 currentUserId: userId,
+                autoStart: true, // ✅ A도 재입장 시 타이머 주체
               ),
             ),
           );
@@ -140,31 +230,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return;
       }
 
-      // ✅ 세션이 없는 경우 (A측)
+      // 새 세션 생성 (A측)
       debugPrint("🆕 새로운 세션 생성 시작 (A측)");
       final ChatRoom room = await repo.startSession();
       sessionCtrl.setSession(room.chatSessionId);
       debugPrint("✅ 세션 생성 완료: ${room.chatSessionId}");
 
-      // 1️⃣ 방 구독
+      // 방 구독
       await repo.subscribeRoom(chatSessionId: room.chatSessionId);
-      debugPrint("✅ 방 구독 완료: ${room.chatSessionId}");
+      debugPrint("✅ 방 구독 완료 → ${room.chatSessionId}");
 
-      // 2️⃣ 초대 전송
+      // 초대 전송
       await repo.sendInvite(
         chatSessionId: room.chatSessionId,
         inviteeId: partnerId,
       );
       debugPrint("💌 초대 전송 완료 → $partnerId");
 
-      // 3️⃣ 채팅방 이동
-      if (context.mounted) {
-        Navigator.push(
+      // ✅ 생성한 방으로 바로 이동 (A측)
+      if (!_hasNavigatedToChat && context.mounted) {
+        _hasNavigatedToChat = true;
+        Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (_) => ChatRoomScreen(
               room: room,
               currentUserId: userId,
+              autoStart: true, // ✅ A는 타이머 시작 주체
             ),
           ),
         );
@@ -179,7 +271,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final userAsync = ref.watch(userProvider);
@@ -192,7 +283,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           data: (couple) {
             final partnerNickname = couple['partnerNickname'] ?? '파트너 없음';
             final userId = user['userId'] ?? "unknown";
-            final partnerId = ref.watch(sessionControllerProvider).partnerId ?? "unknown";
+            final partnerId =
+                ref.watch(sessionControllerProvider).partnerId ?? "unknown";
 
             final screens = [
               ChatReportListScreen(coupleId: user['coupleId'] ?? 0),
@@ -203,7 +295,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   child: Column(
                     children: [
                       const SizedBox(height: 40),
-                      // 🔹 닉네임 & 커플 정보
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
@@ -233,11 +324,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ],
                       ),
                       const SizedBox(height: 20),
-                      // 🔹 코인 표시
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          Image.asset('assets/images/ConnectBeat_coin.png', width: 30, height: 30),
+                          Image.asset('assets/images/ConnectBeat_coin.png',
+                              width: 30, height: 30),
                           const SizedBox(width: 8),
                           const Text(
                             '10 개',
@@ -251,8 +342,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ],
                       ),
                       const Spacer(flex: 2),
-
-                      // 🔹 오늘의 10분 대화 (이미지 + 버튼)
                       Column(
                         children: [
                           GestureDetector(
@@ -280,9 +369,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                         ],
                       ),
-
                       const Spacer(flex: 1),
-                      // 🔹 캐릭터
                       Container(
                         margin: const EdgeInsets.only(bottom: 16),
                         height: 350,
@@ -313,7 +400,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   child: PageView(
                     controller: _pageController,
-                    onPageChanged: (index) => setState(() => _currentIndex = index),
+                    onPageChanged: (index) =>
+                        setState(() => _currentIndex = index),
                     children: screens,
                   ),
                 ),
@@ -331,12 +419,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             );
           },
-          loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-          error: (err, st) => const Scaffold(body: Center(child: Text('커플 정보를 불러올 수 없습니다.'))),
+          loading: () => const Scaffold(
+              body: Center(child: CircularProgressIndicator())),
+          error: (err, st) => const Scaffold(
+              body: Center(child: Text('커플 정보를 불러올 수 없습니다.'))),
         );
       },
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (err, st) => const Scaffold(body: Center(child: Text('사용자 정보를 불러올 수 없습니다.'))),
+      loading: () =>
+      const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (err, st) => const Scaffold(
+          body: Center(child: Text('사용자 정보를 불러올 수 없습니다.'))),
     );
   }
 }
