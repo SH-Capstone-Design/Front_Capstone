@@ -72,7 +72,7 @@ class StompSocketService implements ChatSocketPort {
 
           // ✅ 개인 채널 구독 (/user/{userId}/queue/events)
           _stompClient!.subscribe(
-            destination: '/user/$userId/queue/events',
+            destination: '/user/queue/events',
             callback: (StompFrame frame) {
               if (frame.body != null) {
                 try {
