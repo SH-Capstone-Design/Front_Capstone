@@ -10,9 +10,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-/// =======================
-/// 🔌 ChatSocketPort (WebSocket 추상화)
-/// =======================
 abstract class ChatSocketPort {
   Future<void> connectBase({
     required void Function(Map<String, dynamic>) onPersonalEvent,
@@ -41,9 +38,6 @@ abstract class ChatSocketPort {
   void disconnect();
 }
 
-/// =======================
-/// 💬 ChatRepository 구현체 (A ↔ B 실시간 통신)
-/// =======================
 class ChatRepositoryImpl implements ChatRepository {
   final ChatApiService api;
   final ChatSocketPort socket;
@@ -53,6 +47,7 @@ class ChatRepositoryImpl implements ChatRepository {
   final _eventController = StreamController<ChatRoomEvent>.broadcast();
 
   bool _isDisposed = false;
+  final Set<String> _subscribedRooms = {}; // ✅ 중복 구독 방지용
 
   ChatRepositoryImpl({
     required this.api,
@@ -60,9 +55,6 @@ class ChatRepositoryImpl implements ChatRepository {
     required this.ref,
   });
 
-  // ---------------------------------------------------------------------------
-  // ✅ 1️⃣ 세션 생성 (REST)
-  // ---------------------------------------------------------------------------
   @override
   Future<ChatRoom> startSession() async {
     final room = await api.startSession();
@@ -71,9 +63,6 @@ class ChatRepositoryImpl implements ChatRepository {
     return room;
   }
 
-  // ---------------------------------------------------------------------------
-  // ✅ 2️⃣ 개인 큐(WebSocket) 연결 — 초대 수신 대기
-  // ---------------------------------------------------------------------------
   Future<void> connectBase() async {
     if (_isDisposed) return;
 
@@ -84,39 +73,43 @@ class ChatRepositoryImpl implements ChatRepository {
           final event = ChatRoomEvent.fromJson(data);
           _eventController.add(event);
 
-          // ✅ [B측] 초대 수신 시 자동 join
           if (event.eventType == "INVITATION") {
-            final chatSessionId = event.payload?['chatSessionId'] as String?;
-            final inviterId = event.payload?['inviterId'] as String?;
+            final chatSessionId = event.payload['chatSessionId'] as String?;
+            final inviterId = event.payload['inviterId'] as String?;
 
             if (chatSessionId != null) {
-              print("📨 초대 수신 → 자동 join 시도: $chatSessionId (초대한 사람: $inviterId)");
+              print("📨 초대 수신 → join: $chatSessionId (초대한 사람: $inviterId)");
 
-              // ✅ 세션 상태 저장
               ref.read(sessionControllerProvider.notifier).setSession(chatSessionId);
 
-              // ✅ 방 구독 및 참여
+              // ✅ 이전 대화 불러오기 (초대받은 사람도 바로 표시)
+              final pastMessages = await api.getMessages(chatSessionId);
+              for (final msg in pastMessages) {
+                _messageController.add(msg);
+              }
+
+              // ✅ WebSocket 구독 및 참여
               await subscribeRoom(chatSessionId: chatSessionId);
               await sendJoin(chatSessionId: chatSessionId);
 
               print("✅ 초대 수락 및 방 참여 완료: $chatSessionId");
-            } else {
-              print("⚠️ 초대 이벤트에 chatSessionId 없음: ${event.payload}");
             }
           }
         } catch (e, st) {
-          print("⚠️ onPersonalEvent 처리 실패: $e");
-          print(st);
+          print("⚠️ onPersonalEvent 처리 실패: $e\n$st");
         }
       },
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // ✅ 3️⃣ 방 구독 (/topic/chat/room/{chatSessionId})
-  // ---------------------------------------------------------------------------
   Future<void> subscribeRoom({required String chatSessionId}) async {
     if (_isDisposed) return;
+    if (_subscribedRooms.contains(chatSessionId)) {
+      print("⚠️ 이미 구독 중인 방 → 중복 subscribeRoom() 무시");
+      return;
+    }
+
+    _subscribedRooms.add(chatSessionId);
 
     await socket.subscribeRoom(
       chatSessionId: chatSessionId,
@@ -137,25 +130,14 @@ class ChatRepositoryImpl implements ChatRepository {
     print("🔔 방 구독 완료 → $chatSessionId");
   }
 
-  // ---------------------------------------------------------------------------
-  // ✅ 4️⃣ 메시지 스트림 구독
-  // ---------------------------------------------------------------------------
   @override
-  Stream<ChatMessage> subscribeMessages(String chatSessionId) {
-    return _messageController.stream;
-  }
+  Stream<ChatMessage> subscribeMessages(String chatSessionId) =>
+      _messageController.stream;
 
-  // ---------------------------------------------------------------------------
-  // ✅ 5️⃣ 이벤트 스트림 구독
-  // ---------------------------------------------------------------------------
   @override
-  Stream<ChatRoomEvent> subscribeEvents(String chatSessionId) {
-    return _eventController.stream;
-  }
+  Stream<ChatRoomEvent> subscribeEvents(String chatSessionId) =>
+      _eventController.stream;
 
-  // ---------------------------------------------------------------------------
-  // ✅ 6️⃣ 메시지 전송 (A ↔ B)
-  // ---------------------------------------------------------------------------
   @override
   Future<void> sendMessage({
     required String chatSessionId,
@@ -170,38 +152,27 @@ class ChatRepositoryImpl implements ChatRepository {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // ✅ 7️⃣ 초대 전송 (A → B)
-  // ---------------------------------------------------------------------------
   Future<void> sendInvite({
     required String chatSessionId,
     required String inviteeId,
   }) async {
-    if (inviteeId == "unknown" || inviteeId.isEmpty) {
-      print("⚠️ 초대 실패: 상대방 ID가 없습니다.");
+    if (inviteeId.isEmpty || inviteeId == "unknown") {
+      print("⚠️ 초대 실패: 잘못된 ID");
       return;
     }
     print("📤 [초대 전송] → $inviteeId");
     socket.sendInvite(chatSessionId: chatSessionId, inviteeId: inviteeId);
   }
 
-  // ---------------------------------------------------------------------------
-  // ✅ 8️⃣ 참여 요청 (B → STOMP)
-  // ---------------------------------------------------------------------------
-  Future<void> sendJoin({
-    required String chatSessionId,
-  }) async {
+  Future<void> sendJoin({required String chatSessionId}) async {
     print("📤 [참여 요청] → $chatSessionId");
     socket.sendJoin(chatSessionId: chatSessionId);
   }
 
-  // ---------------------------------------------------------------------------
-  // ✅ 9️⃣ 세션 참여 (B → REST /api/chat/join)
-  // ---------------------------------------------------------------------------
   Future<void> joinRoom(String chatSessionId) async {
     try {
       final token = await api.getToken();
-      if (token == null) throw Exception("토큰이 없습니다. 로그인 필요.");
+      if (token == null) throw Exception("토큰 없음");
 
       final url = Uri.parse("${api.baseUrl}/chat/join");
       final headers = {
@@ -209,56 +180,34 @@ class ChatRepositoryImpl implements ChatRepository {
         "Content-Type": "application/json",
       };
       final body = jsonEncode({'chatSessionId': chatSessionId});
-
-      print("📡 [JOIN 요청] → $url");
-      print("📡 [JOIN body] → $body");
-
       final res = await http.post(url, headers: headers, body: body);
 
-      print("📡 [JOIN status] → ${res.statusCode}");
-      print("📡 [JOIN response] → ${res.body}");
-
-      if (res.statusCode == 200) {
-        print("✅ 세션 참여 성공: $chatSessionId");
-      } else {
-        throw Exception("세션 참여 실패 (${res.statusCode}): ${res.body}");
-      }
+      print("📡 JOIN 응답: ${res.statusCode}");
+      if (res.statusCode != 200) throw Exception(res.body);
     } catch (e) {
       print("❌ joinRoom 실패: $e");
       rethrow;
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // ✅ 🔟 연결 해제 및 Stream 닫기
-  // ---------------------------------------------------------------------------
-  void disconnect() {
-    if (_isDisposed) {
-      print("⚠️ 이미 dispose된 ChatRepositoryImpl — 중복 disconnect 무시");
-      return;
-    }
-    _isDisposed = true;
-    try {
-      socket.disconnect();
-      if (!_messageController.isClosed) _messageController.close();
-      if (!_eventController.isClosed) _eventController.close();
-      print("🔌 ChatRepositoryImpl: WebSocket 종료 및 Stream 닫힘");
-    } catch (e, st) {
-      print("⚠️ disconnect 중 오류: $e\n$st");
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // ✅ 11️⃣ 세션 종료 (REST)
-  // ---------------------------------------------------------------------------
   @override
   Future<void> closeSession(String chatSessionId) async {
     await api.closeSession(chatSessionId);
     disconnect();
   }
 
-  // ---------------------------------------------------------------------------
-  // ✅ 12️⃣ eventStream Getter (chat_room_controller용)
-  // ---------------------------------------------------------------------------
+  void disconnect() {
+    if (_isDisposed) return;
+    _isDisposed = true;
+    try {
+      socket.disconnect();
+      if (!_messageController.isClosed) _messageController.close();
+      if (!_eventController.isClosed) _eventController.close();
+      print("🔌 WebSocket 및 Stream 닫힘");
+    } catch (e) {
+      print("⚠️ disconnect 중 오류: $e");
+    }
+  }
+
   Stream<ChatRoomEvent> get eventStream => _eventController.stream;
 }
