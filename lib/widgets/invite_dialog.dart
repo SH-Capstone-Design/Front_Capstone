@@ -1,36 +1,39 @@
-// 상대방 폰 팝업 : 수락, 거절 버튼
+// lib/widgets/invite_dialog.dart
 import 'package:flutter/material.dart';
 
 class InviteDialog extends StatelessWidget {
-  final String inviterName; // 초대한 사람 이름(닉네임)
+  final String inviterName;
   final VoidCallback onAccept;
-  final VoidCallback onReject;
+  final VoidCallback onDecline;
 
   const InviteDialog({
     super.key,
     required this.inviterName,
     required this.onAccept,
-    required this.onReject,
+    required this.onDecline,
   });
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('$inviterName 님의 초대', style: const TextStyle(fontWeight: FontWeight.bold)),
-      content: const Text('채팅방에 참여하시겠습니까?'),
+      title: const Text("초대 알림"),
+      content: Text("$inviterName 님이 채팅을 초대했습니다."),
       actions: [
         TextButton(
-          onPressed: onAccept,
-          child: const Text('수락'),
+          onPressed: () {
+            onDecline();
+            Navigator.of(context).pop();
+          },
+          child: const Text("거절"),
         ),
-        TextButton(
-          onPressed: onReject,
-          child: const Text('거절'),
+        ElevatedButton(
+          onPressed: () {
+            onAccept();
+            Navigator.of(context).pop();
+          },
+          child: const Text("수락"),
         ),
       ],
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
     );
   }
 }
