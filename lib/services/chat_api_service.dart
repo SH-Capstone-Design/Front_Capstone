@@ -10,6 +10,14 @@ import 'package:connectbeat/services/auth_service.dart';
 class ChatApiService {
   static final String _baseUrl = dotenv.env['BASE_URL'] ?? '';
 
+  /// ✅ 외부에서 접근 가능한 baseUrl getter
+  String get baseUrl => _baseUrl;
+
+  /// ✅ 외부에서 직접 토큰을 가져올 수 있도록 노출
+  Future<String?> getToken() async {
+    return await AuthService.getToken();
+  }
+
   /// 공통 헤더 (JWT 포함)
   Future<Map<String, String>> _headers() async {
     final token = await AuthService.getToken();

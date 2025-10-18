@@ -98,10 +98,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
-  /// ✅ 대화 세션 생성 및 채팅방 이동
+  /// ✅ 대화 세션 생성 또는 참여 및 채팅방 이동
   Future<void> _startChat(BuildContext context, String userId, String partnerId) async {
     final repo = ref.read(chatRepositoryProvider);
     final sessionCtrl = ref.read(sessionControllerProvider.notifier);
+    final sessionState = ref.read(sessionControllerProvider);
 
     if (partnerId.isEmpty || partnerId == "unknown") {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -111,16 +112,60 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
 
     try {
+      // ✅ 이미 초대받은 세션이 있다면 (B측)
+      if (sessionState.chatSessionId != null && sessionState.chatSessionId!.isNotEmpty) {
+        final chatSessionId = sessionState.chatSessionId!;
+        debugPrint("📥 기존 세션 참여 시도 → $chatSessionId");
+
+        // 1️⃣ 세션 참여
+        await repo.joinRoom(chatSessionId);
+        debugPrint("✅ 세션 참여 성공: $chatSessionId");
+
+        // 2️⃣ 방 구독
+        await repo.subscribeRoom(chatSessionId: chatSessionId);
+        debugPrint("✅ 방 구독 완료: $chatSessionId");
+
+        // 3️⃣ 채팅방 이동
+        if (context.mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ChatRoomScreen(
+                room: ChatRoom(chatSessionId: chatSessionId),
+                currentUserId: userId,
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      // ✅ 세션이 없는 경우 (A측)
+      debugPrint("🆕 새로운 세션 생성 시작 (A측)");
       final ChatRoom room = await repo.startSession();
       sessionCtrl.setSession(room.chatSessionId);
-      await repo.subscribeRoom(chatSessionId: room.chatSessionId);
-      await repo.sendInvite(chatSessionId: room.chatSessionId, inviteeId: partnerId);
+      debugPrint("✅ 세션 생성 완료: ${room.chatSessionId}");
 
+      // 1️⃣ 방 구독
+      await repo.subscribeRoom(chatSessionId: room.chatSessionId);
+      debugPrint("✅ 방 구독 완료: ${room.chatSessionId}");
+
+      // 2️⃣ 초대 전송
+      await repo.sendInvite(
+        chatSessionId: room.chatSessionId,
+        inviteeId: partnerId,
+      );
+      debugPrint("💌 초대 전송 완료 → $partnerId");
+
+      // 3️⃣ 채팅방 이동
       if (context.mounted) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => ChatRoomScreen(room: room, currentUserId: userId),
+            builder: (_) => ChatRoomScreen(
+              room: room,
+              currentUserId: userId,
+            ),
           ),
         );
       }
@@ -133,6 +178,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

@@ -1,46 +1,43 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:connectbeat/models/chat_room.dart';
 import 'package:connectbeat/models/chat_message.dart';
 import 'package:connectbeat/models/chat_room_event.dart';
 import 'package:connectbeat/services/chat_repository.dart';
 import 'package:connectbeat/services/chat_api_service.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectbeat/providers/session_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 /// =======================
 /// 🔌 ChatSocketPort (WebSocket 추상화)
 /// =======================
 abstract class ChatSocketPort {
-  /// ✅ 개인 큐(WebSocket) 기본 연결 (/user/queue/events)
   Future<void> connectBase({
     required void Function(Map<String, dynamic>) onPersonalEvent,
   });
 
-  /// ✅ 채팅방 구독 (/topic/chat/room/{chatSessionId})
   Future<void> subscribeRoom({
     required String chatSessionId,
     required void Function(Map<String, dynamic>) onRoomEvent,
   });
 
-  /// ✅ 메시지 전송
   void sendMessage({
     required String chatSessionId,
     required String senderId,
     required String content,
   });
 
-  /// ✅ 초대 전송
   void sendInvite({
     required String chatSessionId,
     required String inviteeId,
   });
 
-  /// ✅ 참여 전송
   void sendJoin({
     required String chatSessionId,
   });
 
-  /// ✅ 연결 해제
   void disconnect();
 }
 
@@ -128,8 +125,7 @@ class ChatRepositoryImpl implements ChatRepository {
           if (data.containsKey("eventType")) {
             final event = ChatRoomEvent.fromJson(data);
             _eventController.add(event);
-          } else if (data.containsKey("senderId") &&
-              data.containsKey("content")) {
+          } else if (data.containsKey("senderId") && data.containsKey("content")) {
             final msg = ChatMessage.fromJson(data);
             _messageController.add(msg);
           }
@@ -190,7 +186,7 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   // ---------------------------------------------------------------------------
-  // ✅ 8️⃣ 참여 요청 (B → Server)
+  // ✅ 8️⃣ 참여 요청 (B → STOMP)
   // ---------------------------------------------------------------------------
   Future<void> sendJoin({
     required String chatSessionId,
@@ -200,7 +196,41 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   // ---------------------------------------------------------------------------
-  // ✅ 9️⃣ 연결 해제 및 Stream 닫기
+  // ✅ 9️⃣ 세션 참여 (B → REST /api/chat/join)
+  // ---------------------------------------------------------------------------
+  Future<void> joinRoom(String chatSessionId) async {
+    try {
+      final token = await api.getToken();
+      if (token == null) throw Exception("토큰이 없습니다. 로그인 필요.");
+
+      final url = Uri.parse("${api.baseUrl}/chat/join");
+      final headers = {
+        "Authorization": "Bearer $token",
+        "Content-Type": "application/json",
+      };
+      final body = jsonEncode({'chatSessionId': chatSessionId});
+
+      print("📡 [JOIN 요청] → $url");
+      print("📡 [JOIN body] → $body");
+
+      final res = await http.post(url, headers: headers, body: body);
+
+      print("📡 [JOIN status] → ${res.statusCode}");
+      print("📡 [JOIN response] → ${res.body}");
+
+      if (res.statusCode == 200) {
+        print("✅ 세션 참여 성공: $chatSessionId");
+      } else {
+        throw Exception("세션 참여 실패 (${res.statusCode}): ${res.body}");
+      }
+    } catch (e) {
+      print("❌ joinRoom 실패: $e");
+      rethrow;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // ✅ 🔟 연결 해제 및 Stream 닫기
   // ---------------------------------------------------------------------------
   void disconnect() {
     if (_isDisposed) {
@@ -219,7 +249,7 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   // ---------------------------------------------------------------------------
-  // ✅ 🔟 세션 종료 (REST)
+  // ✅ 11️⃣ 세션 종료 (REST)
   // ---------------------------------------------------------------------------
   @override
   Future<void> closeSession(String chatSessionId) async {
@@ -228,7 +258,7 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   // ---------------------------------------------------------------------------
-  // ✅ 11️⃣ eventStream Getter (chat_room_controller용)
+  // ✅ 12️⃣ eventStream Getter (chat_room_controller용)
   // ---------------------------------------------------------------------------
   Stream<ChatRoomEvent> get eventStream => _eventController.stream;
 }
