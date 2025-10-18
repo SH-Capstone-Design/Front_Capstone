@@ -1,14 +1,14 @@
 import 'dart:async';
 import 'package:connectbeat/models/chat_room.dart';
+import 'package:connectbeat/models/chat_message.dart';
+import 'package:connectbeat/models/chat_room_event.dart';
 import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/widgets/end_chat_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/user_provider.dart';
+import '../providers/session_provider.dart';
 import '../providers/chat_repository_provider.dart';
-import 'package:connectbeat/models/chat_message.dart';
-import 'package:connectbeat/models/chat_room_event.dart';
-import '../providers/session_provider.dart'; // partnerId 접근용
 
 class ChatRoomScreen extends ConsumerStatefulWidget {
   final ChatRoom room;
@@ -36,18 +36,20 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   StreamSubscription<ChatRoomEvent>? _eventSub;
   bool _isDisposed = false;
 
+  bool _partnerJoined = false; // 상대방 입장 여부
+  bool _chatStarted = false; // 타이머 시작 여부
+
   @override
   void initState() {
     super.initState();
     _remainingSeconds = _totalSeconds;
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _initializeChatFlow(); // ✅ 리팩터링된 연결 순서
-      _startTimer();
+      await _initializeChatFlow();
       _addUserEntranceMessage();
     });
-  } //commit
+  }
 
-  /// ✅ 백엔드 ChatController 순서에 맞게 흐름 정리
   Future<void> _initializeChatFlow() async {
     try {
       final repo = ref.read(chatRepositoryProvider);
@@ -57,37 +59,36 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
       print("💬 Chat Flow Init → $chatSessionId / partner=$partnerId");
 
-      // 1️⃣ 개인 큐 연결 (/user/queue/events)
+      // 1️⃣ 개인 큐 연결
       await repo.connectBase();
-      print("✅ 개인 채널 연결 완료 (초대 이벤트 수신 대기)");
+      print("✅ 개인 채널 연결 완료");
 
-      // 2️⃣ 방 구독 (/topic/chat/room/{chatSessionId})
+      // 2️⃣ 방 구독
       await repo.subscribeRoom(chatSessionId: chatSessionId);
-      print("✅ 방 구독 완료: $chatSessionId");
+      print("✅ 방 구독 완료");
 
-      // 3️⃣ 초대 전송 (A → B)
-      // (이미 방을 만든 유저는 커플 상대방에게 초대 보냄)
+      // 3️⃣ 초대 전송
       await repo.sendInvite(
         chatSessionId: chatSessionId,
         inviteeId: partnerId,
       );
       print("📨 초대 전송 완료 → $partnerId");
 
-      // 4️⃣ 이벤트 리스너 (초대, join, 대화시작 등)
+      // 4️⃣ 이벤트 리스너
       _eventSub = repo.subscribeEvents(chatSessionId).listen((event) {
         if (_isDisposed) return;
 
         switch (event.eventType) {
-          case "INVITATION":
-            _addSystemMessage("📩 상대방 초대가 전송되었습니다.");
-            break;
           case "USER_JOINED":
             _addSystemMessage("💞 상대방이 입장했습니다.");
+            _partnerJoined = true;
+            _tryStartChat();
+            break;
+          case "INVITATION":
+            _addSystemMessage("📩 상대방 초대가 도착했습니다.");
             break;
           case "CONVERSATION_STARTED":
-            final topic =
-                event.payload?["topic"] ?? "오늘의 대화가 시작되었습니다.";
-            _addSystemMessage("🗣️ $topic");
+            _addSystemMessage("🗣️ 대화가 시작되었습니다.");
             break;
           case "CONVERSATION_ENDED":
             _addSystemMessage("⏰ 대화가 종료되었습니다.");
@@ -97,8 +98,6 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
             final msg = event.payload?["message"] ?? "알 수 없는 오류";
             _addSystemMessage("⚠️ 오류: $msg");
             break;
-          default:
-            print("📬 이벤트 수신: ${event.eventType}");
         }
       });
 
@@ -123,7 +122,15 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     }
   }
 
-  /// ✅ 타이머 시작
+  /// 둘 다 입장했으면 타이머 시작
+  void _tryStartChat() {
+    if (!_chatStarted && _partnerJoined) {
+      _chatStarted = true;
+      _startTimer();
+      _addSystemMessage("⏰ 대화가 시작되었습니다! 10분 타이머 작동 중.");
+    }
+  }
+
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_remainingSeconds <= 1) {
@@ -138,7 +145,6 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     });
   }
 
-  /// ✅ 세션 종료
   void _onSessionEnd() {
     if (!mounted || _isDisposed) return;
     _isDisposed = true;
@@ -154,19 +160,12 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       const SnackBar(content: Text("⏰ 채팅 세션이 종료되었습니다.")),
     );
 
-    if (Navigator.canPop(context)) {
-      Navigator.pop(context);
-    }
+    if (Navigator.canPop(context)) Navigator.pop(context);
   }
 
-  String _formatTime(int seconds) {
-    final minutes = seconds ~/ 60;
-    final secs = seconds % 60;
-    return "${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}";
-  }
-
-  /// ✅ 메시지 전송
   void _sendMessage() {
+    if (!_chatStarted) return; // 둘 다 입장 전에는 전송 불가
+
     final text = _controller.text.trim();
     if (text.isEmpty) return;
 
@@ -184,6 +183,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         "time": TimeOfDay.now().format(context),
       });
     });
+
     _controller.clear();
     _scrollToBottom();
   }
@@ -242,6 +242,12 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     }
 
     super.dispose();
+  }
+
+  String _formatTime(int seconds) {
+    final minutes = seconds ~/ 60;
+    final secs = seconds % 60;
+    return "${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}";
   }
 
   @override
@@ -335,9 +341,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                     return Align(
                       alignment: isSystem
                           ? Alignment.center
-                          : (isMe
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft),
+                          : (isMe ? Alignment.centerRight : Alignment.centerLeft),
                       child: Container(
                         margin: const EdgeInsets.symmetric(vertical: 4),
                         padding: const EdgeInsets.symmetric(
@@ -345,9 +349,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                         decoration: BoxDecoration(
                           color: isSystem
                               ? Colors.black.withOpacity(0.3)
-                              : (isMe
-                              ? Colors.pinkAccent
-                              : Colors.grey[300]),
+                              : (isMe ? Colors.pinkAccent : Colors.grey[300]),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Text(
@@ -378,15 +380,18 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                       child: TextField(
                         controller: _controller,
                         style: const TextStyle(fontFamily: 'GowunBatang'),
-                        decoration: const InputDecoration(
-                          hintText: "메시지를 입력하세요...",
+                        enabled: _chatStarted, // 둘 다 입장 전에는 비활성화
+                        decoration: InputDecoration(
+                          hintText: _chatStarted
+                              ? "메시지를 입력하세요..."
+                              : "상대방 입장 대기 중...",
                           border: InputBorder.none,
                         ),
                       ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.send, color: Colors.black),
-                      onPressed: _sendMessage,
+                      onPressed: _chatStarted ? _sendMessage : null,
                     ),
                   ],
                 ),
