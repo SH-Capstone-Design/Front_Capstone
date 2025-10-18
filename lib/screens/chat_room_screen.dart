@@ -45,7 +45,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       _startTimer();
       _addUserEntranceMessage();
     });
-  }
+  } //commit
 
   /// ✅ 백엔드 ChatController 순서에 맞게 흐름 정리
   Future<void> _initializeChatFlow() async {
