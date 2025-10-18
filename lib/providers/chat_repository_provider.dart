@@ -1,4 +1,3 @@
-// lib/providers/chat_repository_provider.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:connectbeat/services/chat_repository.dart';
@@ -35,16 +34,14 @@ final chatRepositoryProvider = Provider<ChatRepositoryImpl>((ref) {
           'Authorization': headers['Authorization']!,
       };
     },
-    topicBuilder: (id) => '/topic/chat/room/$id', // ✅ 공용 채널
-    sendDestinationBuilder: (_) => '/app/chat/message', // ✅ 메시지 전송
     printDebugLog: true,
   );
 
-  return ChatRepositoryImpl(api: api, socket: socket);
+  return ChatRepositoryImpl(api: api, socket: socket, ref: ref);
 });
 
 /// ✅ 소켓 연결 관리 Provider
-/// UI에서 `ref.read(chatSocketControllerProvider).connect(...)` 식으로 호출
+/// UI에서 `ref.read(chatSocketControllerProvider).connect()` 식으로 호출
 final chatSocketControllerProvider =
 StateNotifierProvider<ChatSocketController, bool>((ref) {
   final repo = ref.read(chatRepositoryProvider);
@@ -57,18 +54,12 @@ class ChatSocketController extends StateNotifier<bool> {
 
   ChatSocketController(this._repo) : super(false);
 
-  /// 소켓 연결 (채팅방 입장 시점에서 호출)
-  Future<void> connect({
-    required String chatSessionId,
-    required String userId,
-  }) async {
+  /// 소켓 기본 연결 (개인 큐 구독)
+  Future<void> connect() async {
     try {
-      await _repo.connectSocket(
-        chatSessionId: chatSessionId,
-        userId: userId,
-      );
+      await _repo.connectBase(); // ✅ 새 구조에 맞게 변경됨
       state = true;
-      print('🔗 WebSocket 연결 완료: $chatSessionId / user=$userId');
+      print('🔗 WebSocket 기본 연결 완료 (개인 큐 구독)');
     } catch (e) {
       print('❌ WebSocket 연결 실패: $e');
     }

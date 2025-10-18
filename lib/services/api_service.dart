@@ -3,15 +3,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'auth_service.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:connectbeat/providers/current_user_provider.dart';
 
 class ApiService {
   static final String _baseUrl = dotenv.env['BASE_URL'] ?? '';
 
-  /// 🔐 소셜 로그인 API (JWT 토큰 저장 + 사용자 상태 업데이트)
+  /// 🔐 소셜 로그인 API (JWT 토큰 저장)
   static Future<void> loginWithProvider({
-    required WidgetRef ref,
     required String provider,
     required String accessToken,
   }) async {
@@ -32,11 +29,7 @@ class ApiService {
       final token = data['token'];
       await AuthService.saveToken(token);
 
-      // ✅ 사용자 정보 저장
-      final userId = data['userId'];
-      ref.read(currentUserProvider.notifier).state = userId;
-
-      print("✅ Login success, userId = $userId");
+      print("✅ Login success");
       print("🔑 Token saved: $token");
     } else {
       print("❌ Login failed: ${response.statusCode}, ${response.body}");

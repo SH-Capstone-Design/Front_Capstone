@@ -33,14 +33,6 @@ abstract class ChatRepository {
     required String content,
   });
 
-  /// ✅ 주제 선택 전송
-  /// - backend: STOMP publish → /app/chat/category-select
-  ///   payload 예: { chatSessionId, categoryId }
-  Future<void> sendCategorySelect({
-    required String chatSessionId,
-    required int categoryId,
-  });
-
   /// ✅ 세션 종료 (분석 단계로 진입)
   /// - backend: POST /api/chat/rooms/{chatSessionId}/end
   Future<void> closeSession(String chatSessionId);

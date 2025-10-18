@@ -8,6 +8,7 @@ import '../providers/user_provider.dart';
 import '../providers/chat_repository_provider.dart';
 import 'package:connectbeat/models/chat_message.dart';
 import 'package:connectbeat/models/chat_room_event.dart';
+import '../providers/session_provider.dart'; // partnerId 접근용
 
 class ChatRoomScreen extends ConsumerStatefulWidget {
   final ChatRoom room;
@@ -39,59 +40,86 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   void initState() {
     super.initState();
     _remainingSeconds = _totalSeconds;
-    _connectSocket();
-    _startTimer();
-    _addUserEntranceMessage();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _initializeChatFlow(); // ✅ 리팩터링된 연결 순서
+      _startTimer();
+      _addUserEntranceMessage();
+    });
   }
 
-  /// ✅ WebSocket 연결 및 이벤트 구독
-  Future<void> _connectSocket() async {
+  /// ✅ 백엔드 ChatController 순서에 맞게 흐름 정리
+  Future<void> _initializeChatFlow() async {
     try {
       final repo = ref.read(chatRepositoryProvider);
+      final partnerId =
+          ref.read(sessionControllerProvider.notifier).partnerId ?? "unknown";
+      final chatSessionId = widget.room.chatSessionId;
 
-      // ✅ STOMP 연결
-      await repo.connectSocket(
-        chatSessionId: widget.room.chatSessionId,
-        userId: widget.currentUserId,
+      print("💬 Chat Flow Init → $chatSessionId / partner=$partnerId");
+
+      // 1️⃣ 개인 큐 연결 (/user/queue/events)
+      await repo.connectBase();
+      print("✅ 개인 채널 연결 완료 (초대 이벤트 수신 대기)");
+
+      // 2️⃣ 방 구독 (/topic/chat/room/{chatSessionId})
+      await repo.subscribeRoom(chatSessionId: chatSessionId);
+      print("✅ 방 구독 완료: $chatSessionId");
+
+      // 3️⃣ 초대 전송 (A → B)
+      // (이미 방을 만든 유저는 커플 상대방에게 초대 보냄)
+      await repo.sendInvite(
+        chatSessionId: chatSessionId,
+        inviteeId: partnerId,
       );
+      print("📨 초대 전송 완료 → $partnerId");
 
-      // ✅ 메시지 스트림
-      _messageSub = repo
-          .subscribeMessages(widget.room.chatSessionId)
-          .listen((msg) {
+      // 4️⃣ 이벤트 리스너 (초대, join, 대화시작 등)
+      _eventSub = repo.subscribeEvents(chatSessionId).listen((event) {
         if (_isDisposed) return;
-        setState(() {
-          _messages.add({
-            "sender": msg.senderId == widget.currentUserId ? "me" : "other",
-            "content": msg.content,
-            "time": TimeOfDay.now().format(context),
-          });
-        });
-        _scrollToBottom();
+
+        switch (event.eventType) {
+          case "INVITATION":
+            _addSystemMessage("📩 상대방 초대가 전송되었습니다.");
+            break;
+          case "USER_JOINED":
+            _addSystemMessage("💞 상대방이 입장했습니다.");
+            break;
+          case "CONVERSATION_STARTED":
+            final topic =
+                event.payload?["topic"] ?? "오늘의 대화가 시작되었습니다.";
+            _addSystemMessage("🗣️ $topic");
+            break;
+          case "CONVERSATION_ENDED":
+            _addSystemMessage("⏰ 대화가 종료되었습니다.");
+            _onSessionEnd();
+            break;
+          case "ERROR":
+            final msg = event.payload?["message"] ?? "알 수 없는 오류";
+            _addSystemMessage("⚠️ 오류: $msg");
+            break;
+          default:
+            print("📬 이벤트 수신: ${event.eventType}");
+        }
       });
 
-      // ✅ 이벤트 스트림
-      _eventSub =
-          repo.subscribeEvents(widget.room.chatSessionId).listen((event) {
+      // 5️⃣ 메시지 스트림 리스너
+      _messageSub =
+          repo.subscribeMessages(chatSessionId).listen((ChatMessage msg) {
             if (_isDisposed) return;
-            switch (event.eventType) {
-              case "USER_JOINED":
-                _addSystemMessage("상대방이 입장했습니다 💞");
-                break;
-              case "CONVERSATION_STARTED":
-                final topic = event.payload?["topic"] ?? "주제가 선택되었습니다.";
-                _addSystemMessage("🗣️ $topic");
-                break;
-              case "CONVERSATION_ENDED":
-                _addSystemMessage("⏰ 대화가 종료되었습니다.");
-                _onSessionEnd();
-                break;
-              default:
-                break;
-            }
+            setState(() {
+              _messages.add({
+                "sender": msg.senderId == widget.currentUserId ? "me" : "other",
+                "content": msg.content,
+                "time": TimeOfDay.now().format(context),
+              });
+            });
+            _scrollToBottom();
           });
+
+      print("✅ STOMP 연결 및 이벤트 구독 완료");
+
     } catch (e) {
-      debugPrint("❌ 소켓 연결 실패: $e");
+      debugPrint("❌ 채팅 초기화 실패: $e");
     }
   }
 
@@ -110,14 +138,14 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     });
   }
 
-  /// ✅ 세션 종료 처리
+  /// ✅ 세션 종료
   void _onSessionEnd() {
     if (!mounted || _isDisposed) return;
     _isDisposed = true;
 
     final repo = ref.read(chatRepositoryProvider);
     try {
-      repo.disconnect(); // 안전하게 STOMP 종료
+      repo.disconnect();
     } catch (e) {
       debugPrint("⚠️ disconnect 중 오류: $e");
     }
@@ -156,7 +184,6 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         "time": TimeOfDay.now().format(context),
       });
     });
-
     _controller.clear();
     _scrollToBottom();
   }
@@ -230,7 +257,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              // 🔹 AppBar
+              // 상단 바
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Row(
@@ -257,10 +284,8 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    const CircleAvatar(radius: 20),
-                    const SizedBox(width: 10),
                     const Text(
-                      "대화 중 💬",
+                      "10분 대화 💬",
                       style: TextStyle(
                         fontFamily: 'GowunBatang',
                         fontSize: 20,
@@ -277,8 +302,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                     ),
                     const Spacer(),
                     Container(
-                      padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: Colors.redAccent.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(12),
@@ -296,12 +320,11 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 ),
               ),
 
-              // 🔹 채팅 메시지
+              // 메시지 영역
               Expanded(
                 child: ListView.builder(
                   controller: _scrollController,
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   itemCount: _messages.length,
                   itemBuilder: (context, index) {
                     final msg = _messages[index];
@@ -320,59 +343,24 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                         padding: const EdgeInsets.symmetric(
                             vertical: 8, horizontal: 12),
                         decoration: BoxDecoration(
-                          gradient: isSystem
-                              ? null
+                          color: isSystem
+                              ? Colors.black.withOpacity(0.3)
                               : (isMe
-                              ? const LinearGradient(
-                            colors: [
-                              Colors.pinkAccent,
-                              Colors.pinkAccent
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                              : LinearGradient(
-                            colors: [Colors.grey, Colors.grey],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )),
-                          color:
-                          isSystem ? Colors.black.withOpacity(0.3) : null,
-                          borderRadius:
-                          BorderRadius.circular(isSystem ? 12 : 16),
+                              ? Colors.pinkAccent
+                              : Colors.grey[300]),
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              msg["content"] ?? "",
-                              style: TextStyle(
-                                fontFamily: 'GowunBatang',
-                                fontSize: isSystem ? 12 : 16,
-                                fontStyle: isSystem
-                                    ? FontStyle.italic
-                                    : FontStyle.normal,
-                                color: isSystem
-                                    ? Colors.white
-                                    : (isMe
-                                    ? Colors.white
-                                    : Colors.black87),
-                              ),
-                            ),
-                            if (!isSystem) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                msg["time"] ?? "",
-                                style: TextStyle(
-                                  fontFamily: 'GowunBatang',
-                                  fontSize: 10,
-                                  color: isMe
-                                      ? Colors.white70
-                                      : Colors.grey[600],
-                                ),
-                              ),
-                            ]
-                          ],
+                        child: Text(
+                          msg["content"] ?? "",
+                          style: TextStyle(
+                            fontFamily: 'GowunBatang',
+                            fontSize: isSystem ? 12 : 16,
+                            fontStyle:
+                            isSystem ? FontStyle.italic : FontStyle.normal,
+                            color: isSystem
+                                ? Colors.white
+                                : (isMe ? Colors.white : Colors.black87),
+                          ),
                         ),
                       ),
                     );
@@ -380,45 +368,19 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 ),
               ),
 
-              // 🔹 입력창
+              // 입력창
               Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
-                  border: const Border(
-                    top: BorderSide(color: Colors.grey, width: 0.2),
-                  ),
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                color: Colors.white.withOpacity(0.9),
                 child: Row(
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.add_circle_outline,
-                          color: Colors.grey),
-                      onPressed: () {},
-                    ),
                     Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: TextField(
-                          controller: _controller,
-                          minLines: 1,
-                          maxLines: 4,
-                          keyboardType: TextInputType.multiline,
-                          style: const TextStyle(
-                            fontFamily: 'GowunBatang',
-                            fontSize: 15,
-                            color: Colors.black87,
-                          ),
-                          decoration: const InputDecoration(
-                            hintText: "메시지를 입력하세요...",
-                            border: InputBorder.none,
-                          ),
+                      child: TextField(
+                        controller: _controller,
+                        style: const TextStyle(fontFamily: 'GowunBatang'),
+                        decoration: const InputDecoration(
+                          hintText: "메시지를 입력하세요...",
+                          border: InputBorder.none,
                         ),
                       ),
                     ),

@@ -26,6 +26,7 @@ class CoupleService {
         // ✅ utf8.decode로 한글 깨짐 방지
         final decoded = utf8.decode(response.bodyBytes);
         final data = json.decode(decoded);
+        debugPrint("💌 Couple status response: $data");
         return data;
       } else {
         debugPrint("CoupleService: 상태 조회 실패 ${response.statusCode}");
