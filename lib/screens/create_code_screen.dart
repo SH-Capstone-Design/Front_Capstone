@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +7,7 @@ import 'package:connectbeat/services/auth_service.dart';
 import 'package:connectbeat/services/code_websocket_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:connectbeat/core/constants.dart';
+import 'package:connectbeat/main.dart'; // 글로벌 navigatorKey, messengerKey
 
 class CreateCodeScreen extends StatefulWidget {
   const CreateCodeScreen({super.key});
@@ -43,10 +45,25 @@ class _CreateCodeScreenState extends State<CreateCodeScreen> {
     }
 
     // 1️⃣ WebSocket 연결
-    await CodeWebsocketService.connect(userId, token, context);
+    await CodeWebsocketService.connect(
+      userId,
+      token,
+      onSubscribed: () {
+        print("📌 WebSocket 구독 완료, 이제 코드 생성 호출 가능");
 
-    // 2️⃣ 커플 코드 생성
-    _fetchCoupleCode(token);
+        // 2️⃣ 커플 코드 생성
+        _fetchCoupleCode(token);
+
+        // 3️⃣ WebSocket 이벤트 수신 시 화면 전환 처리
+        CodeWebsocketService.setOnCoupleConnected((event) {
+          final message = event['payload']?['message'] ?? '커플 연결 성공!';
+          navigatorKey.currentState?.pushReplacementNamed('/home');
+          messengerKey.currentState?.showSnackBar(
+            SnackBar(content: Text(message)),
+          );
+        });
+      },
+    );
   }
 
   Future<void> _fetchCoupleCode(String token) async {
@@ -148,13 +165,17 @@ class _CreateCodeScreenState extends State<CreateCodeScreen> {
                           GestureDetector(
                             onTap: () {
                               if (_code != null) {
-                                Clipboard.setData(ClipboardData(text: _code!));
+                                Clipboard.setData(
+                                    ClipboardData(text: _code!));
                                 ScaffoldMessenger.of(context)
                                     .showSnackBar(
                                   const SnackBar(
-                                    content: Text('코드가 복사되었습니다!',
-                                        style: TextStyle(
-                                            fontFamily: 'GowunBatang')),
+                                    content: Text(
+                                      '코드가 복사되었습니다!',
+                                      style: TextStyle(
+                                        fontFamily: 'GowunBatang',
+                                      ),
+                                    ),
                                   ),
                                 );
                               }
