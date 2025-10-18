@@ -1,6 +1,3 @@
-// lib/providers/chat_room_controller.dart
-// 채팅방 생성/세션 상태 및 이벤트를 관리하는 Riverpod Notifier
-
 import 'dart:async';
 import 'package:connectbeat/models/chat_room.dart';
 import 'package:connectbeat/models/chat_room_event.dart';
@@ -56,54 +53,80 @@ class ChatRoomController extends Notifier<ChatRoomState> {
     return const ChatRoomState();
   }
 
-  /// ✅ 세션 생성 + 자동 초대
+  // ---------------------------------------------------------------------------
+  // ✅ 1️⃣ 개인 채널(WebSocket 기본 연결)
+  // ---------------------------------------------------------------------------
+  Future<void> connectBase() async {
+    if (_isDisposed) return;
+    if (_repo is! ChatRepositoryImpl) return;
+
+    final chatRepo = _repo as ChatRepositoryImpl;
+
+    await chatRepo.connectBase();
+
+    // ✅ 초대 수신 이벤트 처리
+    _eventSub?.cancel();
+    _eventSub = chatRepo.eventStream.listen((event) async {
+      if (_isDisposed) return;
+
+      // 초대 수신 시 자동 참여
+      if (event.eventType == "INVITATION") {
+        final chatSessionId = event.payload?['chatSessionId'] as String?;
+        if (chatSessionId != null) {
+          print("📨 초대 수신 → 자동 join 시도: $chatSessionId");
+          await chatRepo.sendJoin(chatSessionId: chatSessionId);
+          await chatRepo.subscribeRoom(chatSessionId: chatSessionId);
+
+          // ✅ 상태 업데이트
+          state = state.copyWith(room: ChatRoom(chatSessionId: chatSessionId));
+        }
+      }
+
+      state = state.copyWith(events: [...state.events, event]);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // ✅ 2️⃣ 세션 생성 + 초대 전송 (A 사용자)
+  // ---------------------------------------------------------------------------
   Future<void> startSession({
     required String userId,
-    required String partnerId, // 👈 초대할 상대방 ID 추가
+    required String partnerId,
   }) async {
     if (_isDisposed) return;
 
     state = state.copyWith(creating: true, error: null);
     try {
-      // 1️⃣ 세션 생성 (REST)
+      // 1️⃣ REST로 새 채팅방 생성
       final room = await _repo.startSession();
-      if (_isDisposed) return;
       state = state.copyWith(creating: false, room: room);
 
-      // 2️⃣ WebSocket 연결
+      // 2️⃣ 개인 채널 연결
+      await connectBase();
+
+      // 3️⃣ 상대방 초대 전송
       if (_repo is ChatRepositoryImpl) {
         final chatRepo = _repo as ChatRepositoryImpl;
-        await chatRepo.connectSocket(
-          chatSessionId: room.chatSessionId,
-          userId: userId,
-        );
-
-        // 3️⃣ 상대방에게 초대 전송
         await chatRepo.sendInvite(
           chatSessionId: room.chatSessionId,
           inviteeId: partnerId,
         );
         print("💌 초대 전송 완료 → 상대방: $partnerId");
 
-        // 4️⃣ 이벤트 구독
-        _eventSub?.cancel();
-        _eventSub =
-            chatRepo.subscribeEvents(room.chatSessionId).listen((event) {
-              if (_isDisposed) return;
-              state = state.copyWith(events: [...state.events, event]);
-            });
+        // 4️⃣ 자기 자신 방 구독
+        await chatRepo.subscribeRoom(chatSessionId: room.chatSessionId);
       }
     } catch (e) {
-      if (_isDisposed) return;
       print("❌ startSession 오류: $e");
       state = state.copyWith(creating: false, error: e.toString());
     }
   }
 
-  /// ✅ 세션 종료
+  // ---------------------------------------------------------------------------
+  // ✅ 4️⃣ 세션 종료
+  // ---------------------------------------------------------------------------
   Future<void> closeSession() async {
     if (_isDisposed) return;
-
     final room = state.room;
     if (room == null) return;
 
@@ -112,24 +135,13 @@ class ChatRoomController extends Notifier<ChatRoomState> {
       _eventSub?.cancel();
       state = const ChatRoomState();
     } catch (e) {
-      if (_isDisposed) return;
       state = state.copyWith(error: e.toString());
     }
   }
 
-  Future<void> sendCategorySelect({
-    required String chatSessionId,
-    required int categoryId,
-  }) async {
-    if (_isDisposed) return;
-    await _repo.sendCategorySelect(
-      chatSessionId: chatSessionId,
-      categoryId: categoryId,
-    );
-  }
-
-
-  /// ✅ 상태 초기화
+  // ---------------------------------------------------------------------------
+  // ✅ 5️⃣ 상태 초기화
+  // ---------------------------------------------------------------------------
   void clear() {
     if (_isDisposed) return;
     _eventSub?.cancel();

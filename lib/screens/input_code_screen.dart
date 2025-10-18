@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/widgets/rounded_button.dart';
 import 'package:connectbeat/providers/input_code_provider.dart';
+import 'package:connectbeat/providers/session_provider.dart'; // ✅ 추가
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -19,7 +20,7 @@ class InputCodeScreen extends ConsumerStatefulWidget {
 }
 
 class _InputCodeScreenState extends ConsumerState<InputCodeScreen> {
-  /// 커플 코드 입력 후 API 호출
+  /// ✅ 커플 코드 입력 후 API 호출
   Future<String?> _connectCouple(String code) async {
     final token = await AuthService.getToken();
     if (token == null) return '로그인이 필요합니다.';
@@ -27,7 +28,6 @@ class _InputCodeScreenState extends ConsumerState<InputCodeScreen> {
     try {
       final String linkUrl = '$baseUrl/couples/link';
 
-      // 디버그 로그 (요청 직전)
       print("🪪 Sending request to $linkUrl");
       print("🪪 Headers: ${{
         'Content-Type': 'application/json',
@@ -48,22 +48,50 @@ class _InputCodeScreenState extends ConsumerState<InputCodeScreen> {
       print("🧩 Response body: ${response.body}");
 
       if (response.statusCode == 200) {
-        // 연결 성공 → SharedPreferences 업데이트
+        dynamic body;
+
+        // ✅ JSON 파싱 시도 (문자열일 수도 있으므로 예외 처리)
+        try {
+          body = jsonDecode(response.body);
+        } catch (_) {
+          body = response.body; // JSON이 아니면 단순 문자열로 저장
+        }
+
+        // ✅ partnerUserId 추출
+        String? partnerUserId;
+        if (body is Map<String, dynamic>) {
+          partnerUserId = body['partnerUserId'] ?? body['partnerId'];
+        }
+
+        // ✅ partnerId를 전역 상태에 저장 (SessionController)
+        if (partnerUserId != null && partnerUserId.isNotEmpty) {
+          final sessionCtrl = ref.read(sessionControllerProvider.notifier);
+          sessionCtrl.setPartner(partnerUserId);
+          print("💞 partnerUserId 저장 완료: $partnerUserId");
+        } else {
+          print("ℹ️ partnerUserId 없음, 단순 성공 메시지: $body");
+        }
+
+        // ✅ 커플 연결 상태 SharedPreferences 업데이트
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('isCoupleConnected', true);
         await prefs.setString('coupleCode', code);
-        return null;
+
+        return null; // 성공
       } else if (response.statusCode == 400) {
         final body = jsonDecode(response.body);
         return body['error'] ?? '유효하지 않은 코드입니다.';
       } else {
         return '서버 오류가 발생했습니다. (${response.statusCode})';
       }
-    } catch (e) {
+    } catch (e, st) {
+      print("❌ 네트워크 오류: $e\n$st");
       return '네트워크 오류가 발생했습니다.';
     }
   }
 
+
+  /// ✅ 코드 제출
   void _submitCode() async {
     final code = ref.read(codeInputProvider).trim();
 
@@ -75,7 +103,7 @@ class _InputCodeScreenState extends ConsumerState<InputCodeScreen> {
     ref.read(codeLoadingProvider.notifier).state = true;
     ref.read(codeErrorProvider.notifier).state = null;
 
-    // 마스터 코드 처리
+    // 마스터 코드 예외 처리
     if (code == 'connectbeat') {
       await Future.delayed(const Duration(milliseconds: 500));
       final prefs = await SharedPreferences.getInstance();
@@ -83,16 +111,16 @@ class _InputCodeScreenState extends ConsumerState<InputCodeScreen> {
       await prefs.setString('coupleCode', 'connectbeat');
 
       ref.read(codeLoadingProvider.notifier).state = false;
-      Navigator.pushReplacementNamed(context, '/home');
+      if (mounted) Navigator.pushReplacementNamed(context, '/home');
       return;
     }
 
-    // 일반 커플 코드 처리
+    // ✅ 일반 커플 코드 처리
     final errorMsg = await _connectCouple(code);
     ref.read(codeLoadingProvider.notifier).state = false;
 
     if (errorMsg == null) {
-      Navigator.pushReplacementNamed(context, '/home');
+      if (mounted) Navigator.pushReplacementNamed(context, '/home');
     } else {
       ref.read(codeErrorProvider.notifier).state = errorMsg;
     }
@@ -126,6 +154,8 @@ class _InputCodeScreenState extends ConsumerState<InputCodeScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SizedBox(height: topPadding),
+
+                // 🔹 로고
                 SizedBox(
                   height: logoHeight,
                   child: Image.asset(
@@ -134,6 +164,8 @@ class _InputCodeScreenState extends ConsumerState<InputCodeScreen> {
                   ),
                 ),
                 const Spacer(flex: 2),
+
+                // 🔹 코드 입력창
                 Container(
                   height: textFieldHeight,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -148,34 +180,39 @@ class _InputCodeScreenState extends ConsumerState<InputCodeScreen> {
                     decoration: InputDecoration(
                       hintText: '초대 코드 입력',
                       hintStyle: TextStyle(
-                        fontFamily: 'GowunBatang', // 직접 지정
+                        fontFamily: 'GowunBatang',
                         fontSize: screenHeight * 0.02,
                         color: Colors.grey[600],
                       ),
                       border: InputBorder.none,
                       isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                      contentPadding:
+                      const EdgeInsets.symmetric(vertical: 14),
                     ),
                     style: TextStyle(
-                      fontFamily: 'GowunBatang', // 직접 지정
+                      fontFamily: 'GowunBatang',
                       fontSize: screenHeight * 0.022,
                       color: Colors.black87,
                     ),
                   ),
                 ),
+
                 if (errorMessage != null) ...[
                   SizedBox(height: screenHeight * 0.01),
                   Text(
                     errorMessage,
                     style: TextStyle(
-                      fontFamily: 'GowunBatang', // 직접 지정
+                      fontFamily: 'GowunBatang',
                       fontSize: screenHeight * 0.018,
                       color: Colors.redAccent,
                     ),
                     textAlign: TextAlign.center,
                   ),
                 ],
+
                 SizedBox(height: screenHeight * 0.03),
+
+                // 🔹 확인 버튼
                 RoundedButton(
                   text: '코드 확인',
                   onPressed: isLoading ? null : _submitCode,
