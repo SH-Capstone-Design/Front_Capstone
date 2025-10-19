@@ -1,5 +1,6 @@
 // lib/screens/chat_room_screen.dart
 import 'dart:async';
+import 'dart:convert';
 import 'package:connectbeat/models/chat_room.dart';
 import 'package:connectbeat/models/chat_message.dart';
 import 'package:connectbeat/models/chat_room_event.dart';
@@ -7,6 +8,8 @@ import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/widgets/end_chat_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 import '../providers/user_provider.dart';
 import '../providers/session_provider.dart';
 import '../providers/chat_repository_provider.dart';
@@ -39,6 +42,8 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   StreamSubscription<ChatMessage>? _messageSub;
   StreamSubscription<ChatRoomEvent>? _eventSub;
   bool _isDisposed = false;
+  bool _chatEnded = false;
+  bool _isEnding = false;
 
   bool _partnerJoined = false;
   bool _chatStarted = false;
@@ -66,7 +71,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       if (_isDisposed) return;
 
       final key = "${msg.senderId}-${msg.content}";
-      if (_messageCache.contains(key)) return; // 중복 방지
+      if (_messageCache.contains(key)) return;
       _messageCache.add(key);
 
       setState(() {
@@ -85,13 +90,11 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
       switch (event.eventType) {
         case "CONVERSATION_STARTED":
-        // 상대방이 채팅 수락 후 시작 신호를 보내야 실행
           _partnerJoined = true;
           _tryStartChat();
           break;
 
         case "USER_JOINED":
-        // 단순 입장 알림만
           if (event.payload?['userId'] != widget.currentUserId) {
             _addSystemMessage("💞 상대방이 채팅방에 입장했습니다.");
           }
@@ -119,28 +122,23 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   void _tryStartChat() {
     if (_chatStarted) return;
 
-    // 둘 다 입장했을 때만 시작
-    if (_partnerJoined && widget.autoStart) {
+    if (_partnerJoined) {
       _chatStarted = true;
       _addSystemMessage("🗣️ 대화가 시작되었습니다! 10분 타이머 작동 중.");
       _startTimer();
-    } else if (_partnerJoined && !widget.autoStart) {
-      _chatStarted = true;
-      _addSystemMessage("🗣️ 대화가 시작되었습니다! 10분 타이머 작동 중.");
-      _startTimer(); // B도 타이머 시작
     }
   }
 
   void _startTimer() {
-    if (_timer != null) return; // 이미 타이머 실행 중이면 중복 방지
+    if (_timer != null) return;
 
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_remainingSeconds <= 1) {
         timer.cancel();
         _timer = null;
-        if (mounted) {
+        if (!_chatEnded && mounted) {
           setState(() => _remainingSeconds = 0);
-          _onSessionEnd(navigateToResult: true);
+          _onSessionEnd(navigateToResult: true); // 자동 종료
         }
       } else {
         if (mounted) setState(() => _remainingSeconds--);
@@ -148,26 +146,40 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     });
   }
 
-  void _onSessionEnd({bool navigateToResult = false}) {
-    if (!mounted || _isDisposed) return;
+  Future<void> _onSessionEnd({bool navigateToResult = false, bool sendApiRequest = false}) async {
+    if (_chatEnded) return;
+    _chatEnded = true;
     _isDisposed = true;
 
+    _timer?.cancel();
+
     try {
+      if (sendApiRequest) {
+        _isEnding = true;
+        final uri = Uri.parse("${dotenv.env['BASE_URL']}/chat/rooms/end");
+        final response = await http.post(uri, headers: {
+          "Content-Type": "application/json",
+        }, body: jsonEncode({
+          "roomId": widget.room.chatSessionId,
+        }));
+
+        if (response.statusCode != 200) {
+          debugPrint("❌ 채팅 종료 API 실패: ${response.statusCode}");
+        }
+      }
+
       ref.read(chatRepositoryProvider).disconnect();
     } catch (e) {
-      debugPrint("⚠️ disconnect 중 오류: $e");
+      debugPrint("⚠️ 채팅 종료 중 오류: $e");
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("⏰ 채팅 세션이 종료되었습니다.")),
-    );
+    _addSystemMessage("⏰ 채팅 세션이 종료되었습니다.");
 
     if (navigateToResult) {
-      Navigator.pushReplacementNamed(context, '/emotion-result');
-      return;
+      if (mounted) Navigator.pushReplacementNamed(context, '/emotion-result');
+    } else {
+      if (Navigator.canPop(context)) Navigator.pop(context);
     }
-
-    if (Navigator.canPop(context)) Navigator.pop(context);
   }
 
   void _sendMessage() {
@@ -177,7 +189,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     if (text.isEmpty) return;
 
     final key = "${widget.currentUserId}-$text";
-    _messageCache.add(key); // 로컬 메시지 중복 등록 방지
+    _messageCache.add(key);
 
     ref.read(chatRepositoryProvider).sendMessage(
       chatSessionId: widget.room.chatSessionId,
@@ -278,11 +290,16 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                   children: [
                     GestureDetector(
                       onTap: () async {
+                        if (_chatEnded || _isEnding) return;
+
                         final shouldEnd = await showDialog<bool>(
                           context: context,
                           builder: (_) => const EndChatDialog(),
                         );
-                        if (shouldEnd == true) _onSessionEnd();
+
+                        if (shouldEnd == true) {
+                          await _onSessionEnd(sendApiRequest: true, navigateToResult: true);
+                        }
                       },
                       child: Container(
                         padding: const EdgeInsets.all(6),
