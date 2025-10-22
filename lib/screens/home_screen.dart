@@ -41,7 +41,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isEyeOpen = true;
   final List<String> _eyeImages = [
     'assets/images/ConnectBeatCharacter.png',
-    'assets/images/ConnectBeatCharacter001.png',
+    'assets/images/ConnectBeatCharacter2.png',
   ];
 
   final List<String> _chatImages = [
