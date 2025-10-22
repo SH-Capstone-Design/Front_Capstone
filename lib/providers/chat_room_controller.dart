@@ -12,7 +12,8 @@ class ChatRoomState {
   final ChatRoom? room;
   final String? error;
   final List<ChatRoomEvent> events;
-  final bool partnerJoined; // 상대방 입장 여부
+  final bool partnerJoined;
+  final bool chatEnded;
 
   const ChatRoomState({
     this.creating = false,
@@ -20,6 +21,7 @@ class ChatRoomState {
     this.error,
     this.events = const [],
     this.partnerJoined = false,
+    this.chatEnded = false, // 기본값 false
   });
 
   ChatRoomState copyWith({
@@ -28,6 +30,7 @@ class ChatRoomState {
     String? error,
     List<ChatRoomEvent>? events,
     bool? partnerJoined,
+    bool? chatEnded,
   }) {
     return ChatRoomState(
       creating: creating ?? this.creating,
@@ -71,12 +74,11 @@ class ChatRoomController extends Notifier<ChatRoomState> {
     _eventSub = chatRepo.eventStream.listen((event) async {
       if (_isDisposed) return;
 
+      // ❌ INVITATION 이벤트는 UI에서 수락 후 join하도록 변경
       if (event.eventType == "INVITATION") {
         final chatSessionId = event.payload?['chatSessionId'] as String?;
         if (chatSessionId != null) {
-          print("📨 초대 수신 → 자동 join 시도: $chatSessionId");
-          await chatRepo.sendJoin(chatSessionId: chatSessionId);
-          await chatRepo.subscribeRoom(chatSessionId: chatSessionId);
+          print("📨 초대 수신 → UI에서 수락 시 join 필요: $chatSessionId");
           state = state.copyWith(room: ChatRoom(chatSessionId: chatSessionId));
         }
       }
@@ -84,6 +86,18 @@ class ChatRoomController extends Notifier<ChatRoomState> {
       // 상대방 입장 감지
       if (event.eventType == "USER_JOINED") {
         state = state.copyWith(partnerJoined: true);
+      }
+
+      // 종료 이벤트 감지 → 로컬 상태 초기화
+      if (event.eventType == "CONVERSATION_ENDED") {
+        _eventSub?.cancel();
+        state = state.copyWith(
+          room: null,
+          partnerJoined: false,
+          events: [...state.events, event],
+          chatEnded: true, // 새 필드
+        );
+        return;
       }
 
       state = state.copyWith(events: [...state.events, event]);
@@ -115,6 +129,16 @@ class ChatRoomController extends Notifier<ChatRoomState> {
     } catch (e) {
       state = state.copyWith(creating: false, error: e.toString());
     }
+  }
+
+  /// UI에서 초대 수락 시 호출
+  Future<void> acceptInvitation() async {
+    final room = state.room;
+    if (_isDisposed || room == null || _repo is! ChatRepositoryImpl) return;
+
+    final chatRepo = _repo as ChatRepositoryImpl;
+    await chatRepo.sendJoin(chatSessionId: room.chatSessionId);
+    state = state.copyWith(partnerJoined: true);
   }
 
   Future<void> closeSession() async {
