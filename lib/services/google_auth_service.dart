@@ -10,6 +10,24 @@ final GoogleSignIn _googleSignIn = GoogleSignIn(
 
 final AuthRepository _authRepository = AuthRepository();
 
+/// ✅ 구글 로그인 후 커플 상태 확인 및 화면 이동
+Future<void> _checkCoupleConnectionGoogle(
+    BuildContext context, Map<String, dynamic> userInfo) async {
+  final coupleStatus = await AuthService.fetchCoupleStatus();
+
+  if (coupleStatus != null && coupleStatus.status == "ACTIVE") {
+    debugPrint('💞 커플 연결됨 → 홈으로 이동');
+    Navigator.pushReplacementNamed(context, '/home');
+  } else {
+    debugPrint('🧍 연결 안 됨 → 프로필 설정 화면으로 이동');
+    Navigator.pushReplacementNamed(
+      context,
+      '/profile-setup',
+      arguments: userInfo,
+    );
+  }
+}
+
 Future<void> signInWithGoogle(BuildContext context) async {
   try {
     final account = await _googleSignIn.signIn();
@@ -35,34 +53,23 @@ Future<void> signInWithGoogle(BuildContext context) async {
 
     final response = await _authRepository.sendGoogleUserToBackend(
       idToken: idToken,
-      // accessToken은 선택사항, 필요 없으면 제거 가능
-      // accessToken: authentication.accessToken,
     );
 
     if (response.statusCode == 200) {
       debugPrint('✅ 백엔드 로그인 성공');
       final body = jsonDecode(response.body);
       final token = body['token'];
-      final jwtToken = body['jwtToken']; // ✅ 올바른 키 사용
+      final jwtToken = body['jwtToken'];
 
-      if (jwtToken != null) {
-        await AuthService.saveToken(jwtToken);
-        await AuthService.saveGoogleIdToken(idToken); // 원하면 원본 토큰도 저장
-      }
+      if (jwtToken != null) await AuthService.saveToken(jwtToken);
+      if (token != null) await AuthService.saveToken(token);
 
-      if (token != null) {
-        await AuthService.saveToken(token);
-        await AuthService.saveGoogleIdToken(idToken);
-      }
-
-      Navigator.pushReplacementNamed(
-        context,
-        '/profile-setup',
-        arguments: {
-          'nickname': nickname,
-          'profileImageUrl': photoUrl,
-        },
-      );
+      // ✅ 커플 상태 확인 후 화면 이동
+      final userInfo = {
+        'nickname': nickname,
+        'profileImageUrl': photoUrl,
+      };
+      await _checkCoupleConnectionGoogle(context, userInfo);
     } else {
       debugPrint('❌ 구글 백엔드 로그인 실패: ${response.statusCode}');
     }

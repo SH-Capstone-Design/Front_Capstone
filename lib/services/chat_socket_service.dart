@@ -80,6 +80,7 @@ class StompSocketService implements ChatSocketPort {
     _stompClient!.subscribe(
       destination: destination,
       callback: (frame) {
+        print('🔥 이벤트 수신: ${frame.body}');
         if (frame.body == null) return;
         try {
           final data = jsonDecode(frame.body!);
@@ -89,7 +90,7 @@ class StompSocketService implements ChatSocketPort {
         }
       },
     );
-
+    print('📡 방 구독 완료: /topic/chat/room/$chatSessionId');
     if (printDebugLog) print("📡 방 구독 완료: $destination");
   }
 
@@ -122,6 +123,7 @@ class StompSocketService implements ChatSocketPort {
     _send('/app/chat/join', {"chatSessionId": chatSessionId});
   }
 
+
   void _send(String dest, Map<String, dynamic> data) {
     if (!isConnected) {
       print("⚠️ WebSocket 미연결, send() 스킵됨: $dest");
@@ -129,6 +131,18 @@ class StompSocketService implements ChatSocketPort {
     }
     _stompClient!.send(destination: dest, body: jsonEncode(data));
   }
+
+  @override
+  void sendEndChat({required String chatSessionId}) {
+    if (_stompClient == null || !_stompClient!.connected) {
+      print("⚠️ STOMP 연결이 끊김, 종료 요청 실패");
+      return;
+    }
+    _send('/app/chat/end', {"chatSessionId": chatSessionId});
+    if (printDebugLog) print("📤 [SEND] /app/chat/end → $chatSessionId");
+  }
+
+
 
   @override
   void disconnect() {
