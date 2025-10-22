@@ -45,7 +45,6 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   bool _chatEnded = false;
   bool _isEnding = false;
 
-  bool _partnerJoined = false;
   bool _chatStarted = false;
 
   @override
@@ -59,12 +58,19 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     });
   }
 
+  Future<void> _handleTimerEnd() async {
+    if (!_chatEnded) {
+      _addSystemMessage("⏰ 시간이 다 되어 채팅이 종료됩니다.");
+      await _onSessionEnd(navigateToResult: true);
+    }
+  }
+
+
   Future<void> _initializeChatFlow() async {
     final repo = ref.read(chatRepositoryProvider);
     final chatSessionId = widget.room.chatSessionId;
 
     await repo.connectBase();
-    await repo.subscribeRoom(chatSessionId: chatSessionId);
 
     // 메시지 구독
     _messageSub = repo.subscribeMessages(chatSessionId).listen((msg) {
@@ -86,24 +92,49 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
     // 이벤트 구독
     _eventSub = repo.subscribeEvents(chatSessionId).listen((event) {
+      print("🔥 이벤트 수신: ${event.eventType}");
       if (_isDisposed) return;
 
       switch (event.eventType) {
-        case "CONVERSATION_STARTED":
-          _partnerJoined = true;
-          _tryStartChat();
-          break;
-
         case "USER_JOINED":
           if (event.payload?['userId'] != widget.currentUserId) {
             _addSystemMessage("💞 상대방이 채팅방에 입장했습니다.");
+
+            // ✅ A도 채팅 시작
+            if (!_chatStarted) {
+              _chatStarted = true;
+              _addSystemMessage("🗣️ 대화가 시작되었습니다! 10분 타이머 시작");
+              _startTimer();
+            }
+          }
+          break;
+
+        case "CONVERSATION_STARTED":
+        // autoStart는 A가 새로 생성해서 들어올 때 true
+        // B는 autoStart = false
+          if (!_chatStarted && !widget.autoStart) {
+            _chatStarted = true;
+            _addSystemMessage("🗣️ 대화가 시작되었습니다! 10분 타이머 시작");
+            _startTimer();
           }
           break;
 
         case "CONVERSATION_ENDED":
-          _addSystemMessage("⏰ 대화가 종료되었습니다.");
-          _onSessionEnd();
+          if (!_chatEnded) {
+            _chatEnded = true;
+            _timer?.cancel();
+            _addSystemMessage("⏰ 상대방이 채팅을 종료했습니다.");
+
+            if (mounted) {
+              // 서버 DB 종료도 여기서 안전하게 호출
+              ref.read(chatRepositoryProvider).api.closeSession(widget.room.chatSessionId);
+
+              // 화면 전환
+              Navigator.of(context).pushReplacementNamed('/emotion-result');
+            }
+          }
           break;
+
 
         case "ERROR":
           final msg = event.payload?["message"] ?? "알 수 없는 오류";
@@ -112,20 +143,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       }
     });
 
+    // ❌ A는 방 생성 직후 타이머 시작 X
     if (!widget.autoStart) {
       await repo.sendJoin(chatSessionId: chatSessionId);
-      _partnerJoined = true;
-      _tryStartChat();
-    }
-  }
-
-  void _tryStartChat() {
-    if (_chatStarted) return;
-
-    if (_partnerJoined) {
-      _chatStarted = true;
-      _addSystemMessage("🗣️ 대화가 시작되었습니다! 10분 타이머 작동 중.");
-      _startTimer();
     }
   }
 
@@ -136,54 +156,64 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       if (_remainingSeconds <= 1) {
         timer.cancel();
         _timer = null;
-        if (!_chatEnded && mounted) {
-          setState(() => _remainingSeconds = 0);
-          _onSessionEnd(navigateToResult: true); // 자동 종료
-        }
+
+        if (mounted) setState(() => _remainingSeconds = 0);
+        _handleTimerEnd(); // async 별도 호출
       } else {
         if (mounted) setState(() => _remainingSeconds--);
       }
     });
   }
 
-  Future<void> _onSessionEnd({bool navigateToResult = false, bool sendApiRequest = false}) async {
-    if (_chatEnded) return;
-    _chatEnded = true;
-    _isDisposed = true;
 
-    _timer?.cancel();
+  Future<void> _onSessionEnd({bool navigateToResult = false}) async {
+    if (_isEnding) return; // 중복 호출 방지
+    _isEnding = true;
 
+    // STOMP로 서버 종료 요청만 보내고 UI는 서버 이벤트로 처리
     try {
-      if (sendApiRequest) {
-        _isEnding = true;
-        final uri = Uri.parse("${dotenv.env['BASE_URL']}/chat/rooms/end");
-        final response = await http.post(uri, headers: {
-          "Content-Type": "application/json",
-        }, body: jsonEncode({
-          "roomId": widget.room.chatSessionId,
-        }));
+      final repo = ref.read(chatRepositoryProvider);
 
-        if (response.statusCode != 200) {
-          debugPrint("❌ 채팅 종료 API 실패: ${response.statusCode}");
-        }
-      }
+      // 1️⃣ 서버에 종료 요청
+      await repo.sendEndChat(chatSessionId: widget.room.chatSessionId);
 
-      ref.read(chatRepositoryProvider).disconnect();
+      // UI 갱신은 서버 브로드캐스트 이벤트 수신 시 수행
     } catch (e) {
-      debugPrint("⚠️ 채팅 종료 중 오류: $e");
-    }
-
-    _addSystemMessage("⏰ 채팅 세션이 종료되었습니다.");
-
-    if (navigateToResult) {
-      if (mounted) Navigator.pushReplacementNamed(context, '/emotion-result');
-    } else {
-      if (Navigator.canPop(context)) Navigator.pop(context);
+      debugPrint("❌ 채팅 종료 요청 실패: $e");
     }
   }
 
+  Future<void> _handleRemoteEnd() async {
+    if (_chatEnded) return;
+    _chatEnded = true;
+    _timer?.cancel();
+
+    _addSystemMessage("⏰ 채팅이 종료되었습니다.");
+
+    try {
+      final repo = ref.read(chatRepositoryProvider);
+
+      // 서버 DB 종료
+      await repo.api.closeSession(widget.room.chatSessionId);
+
+      // GoRouter 이름 기반 화면 전환
+      if (mounted) {
+        await Future.delayed(const Duration(milliseconds: 300));
+        Navigator.of(context).pushReplacementNamed('/emotion-result');
+      }
+    } catch (e) {
+      debugPrint("❌ 채팅 종료 처리 오류: $e");
+    }
+  }
+
+
+
+
+
+
+
   void _sendMessage() {
-    if (!_chatStarted) return;
+    if (!_chatStarted || _chatEnded) return;
 
     final text = _controller.text.trim();
     if (text.isEmpty) return;
@@ -294,11 +324,14 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
                         final shouldEnd = await showDialog<bool>(
                           context: context,
-                          builder: (_) => const EndChatDialog(),
+                          builder: (_) => EndChatDialog(
+                            chatSessionId: widget.room.chatSessionId, // 필수 파라미터 전달
+                          ),
                         );
 
+
                         if (shouldEnd == true) {
-                          await _onSessionEnd(sendApiRequest: true, navigateToResult: true);
+                          await _onSessionEnd(navigateToResult: true); // 수동 종료
                         }
                       },
                       child: Container(
@@ -405,7 +438,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                       child: TextField(
                         controller: _controller,
                         style: const TextStyle(fontFamily: 'GowunBatang'),
-                        enabled: _chatStarted,
+                        enabled: _chatStarted && !_chatEnded,
                         decoration: InputDecoration(
                           hintText: _chatStarted
                               ? "메시지를 입력하세요..."
@@ -416,7 +449,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.send, color: Colors.black),
-                      onPressed: _chatStarted ? _sendMessage : null,
+                      onPressed: _chatStarted && !_chatEnded ? _sendMessage : null,
                     ),
                   ],
                 ),
