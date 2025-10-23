@@ -59,8 +59,20 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const SplashScreen());
       case '/main':
         return MaterialPageRoute(builder: (_) => const MainScreen());
+
       case '/emotion-result':
-        return MaterialPageRoute(builder: (_) => const EmotionResultScreen());
+        final args = settings.arguments;
+        if (args is String) {
+          return MaterialPageRoute(
+            builder: (_) => EmotionResultScreen(chatSessionId: args),
+          );
+        } else {
+          return MaterialPageRoute(
+            builder: (_) => const Scaffold(
+              body: Center(child: Text("⚠️ chatSessionId가 전달되지 않았습니다.")),
+            ),
+          );
+        }
 
     // ✅ 둘 다 유지: 캐릭터 & 주제 선택
       case '/character':

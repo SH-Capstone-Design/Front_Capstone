@@ -32,13 +32,15 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
-  final Set<String> _messageCache = {};
+  final Set<String> _messageCache = {}; // 중복 메시지 방지용
 
   static const int _totalSeconds = 600;
   late int _remainingSeconds;
   Timer? _timer;
+
   StreamSubscription<ChatMessage>? _messageSub;
   StreamSubscription<ChatRoomEvent>? _eventSub;
+
   bool _isDisposed = false;
   bool _chatEnded = false;
   bool _isEnding = false;
@@ -60,9 +62,14 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
     await repo.connectBase();
 
-    if (widget.autoStart) _showWaitingDialog();
+    // B가 입장할 때만 join 전송
+    if (!widget.autoStart) {
+      await repo.sendJoin(chatSessionId: chatSessionId);
+    } else {
+      _showWaitingDialog();
+    }
 
-    // 메시지 수신
+    // 메시지 수신 스트림
     _messageSub = repo.subscribeMessages(chatSessionId).listen((msg) {
       if (_isDisposed) return;
       final key = "${msg.senderId}-${msg.content}";
@@ -73,9 +80,11 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       _scrollToBottom();
     });
 
-    // 이벤트 수신
+    // 이벤트 수신 스트림
     _eventSub = repo.subscribeEvents(chatSessionId).listen((event) async {
       if (_isDisposed) return;
+      debugPrint("🔥 이벤트 수신: ${event.eventType}");
+
       switch (event.eventType) {
         case "USER_JOINED":
           _dismissWaitingDialog();
@@ -98,6 +107,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           break;
 
         case "CONVERSATION_ENDED":
+          debugPrint("📩 CONVERSATION_ENDED 수신됨 — 상대방 종료 처리");
           await _handleRemoteEnd();
           break;
 
@@ -107,10 +117,6 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           break;
       }
     });
-
-    if (!widget.autoStart) {
-      await repo.sendJoin(chatSessionId: chatSessionId);
-    }
   }
 
   void _showWaitingDialog() {
@@ -134,6 +140,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
   void _startTimer() {
     if (_timer != null) return;
+
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_remainingSeconds <= 1) {
         timer.cancel();
@@ -165,9 +172,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       final repo = ref.read(chatRepositoryProvider);
       await repo.sendEndChat(chatSessionId: widget.room.chatSessionId);
 
-      // REST API 호출, 내가 종료할 때만
       await Future.delayed(const Duration(milliseconds: 300));
-      // await repo.api.closeSession(widget.room.chatSessionId);
 
       if (mounted && navigateToResult) {
         Navigator.pushReplacementNamed(
@@ -228,7 +233,6 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
     _scrollToBottom();
   }
-
 
   void _addSystemMessage(String text) {
     if (_isDisposed) return;
@@ -371,7 +375,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 ),
               ),
 
-              // 메시지 영역
+              // 메시지 리스트
               Expanded(
                 child: ListView.builder(
                   controller: _scrollController,
@@ -379,11 +383,34 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                   itemCount: _messages.length,
                   itemBuilder: (context, index) {
                     final msg = _messages[index];
-                    final isMine = msg.senderId == widget.currentUserId;
-                    return MessageBubble(
-                      message: msg,
-                      isMine: isMine,
-                      showTime: true,
+                    final isMe = msg.senderId == widget.currentUserId;
+                    final isSystem = msg.senderId == "system";
+
+                    return Align(
+                      alignment: isSystem
+                          ? Alignment.center
+                          : (isMe ? Alignment.centerRight : Alignment.centerLeft),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: isSystem
+                              ? Colors.black.withOpacity(0.3)
+                              : (isMe ? Colors.pinkAccent : Colors.grey[300]),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          msg.content,
+                          style: TextStyle(
+                            fontFamily: 'GowunBatang',
+                            fontSize: isSystem ? 12 : 16,
+                            fontStyle: isSystem ? FontStyle.italic : FontStyle.normal,
+                            color: isSystem
+                                ? Colors.white
+                                : (isMe ? Colors.white : Colors.black87),
+                          ),
+                        ),
+                      ),
                     );
                   },
                 ),

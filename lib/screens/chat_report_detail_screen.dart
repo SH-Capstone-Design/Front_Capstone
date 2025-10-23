@@ -41,6 +41,20 @@ class ChatReportDetailScreen extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             child: reportAsync.when(
               data: (report) {
+                // report가 null인지 먼저 체크
+                if (report == null) {
+                  return const Center(
+                    child: Text(
+                      '리포트 데이터를 불러오지 못했습니다.',
+                      style: TextStyle(
+                        fontFamily: 'GowunBatang',
+                        fontSize: infoFontSize,
+                        color: Colors.black54,
+                      ),
+                    ),
+                  );
+                }
+
                 final detailedEmotions = report['detailedEmotions'] as List<dynamic>? ?? [];
                 if (detailedEmotions.isEmpty) {
                   return const Center(

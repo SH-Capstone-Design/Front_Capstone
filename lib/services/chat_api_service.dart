@@ -52,19 +52,44 @@ class ChatApiService {
   /// ✅ 채팅방 종료 (POST /api/chat/rooms/end)
   /// =======================
   Future<void> closeSession(String chatSessionId) async {
-    final headers = await _headers();
-    final url = Uri.parse("$_baseUrl/chat/rooms/end");
+    try {
+      // ✅ JWT 토큰 가져오기
+      final token = await AuthService.getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception("🚫 로그인 토큰이 없습니다. 인증 실패");
+      }
 
-    final res = await http.post(
-      url,
-      headers: headers,
-      body: jsonEncode({"chatSessionId": chatSessionId}),
-    );
+      final url = Uri.parse("$_baseUrl/chat/rooms/end");
+      debugPrint("📤 [POST] $url");
 
-    if (res.statusCode != 200) {
-      throw Exception("세션 종료 실패: [${res.statusCode}] ${res.body}");
+      // ✅ 요청 헤더
+      final headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+
+      // ✅ POST 요청
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: jsonEncode({'chatSessionId': chatSessionId}),
+      );
+
+      debugPrint("🧩 closeSession 응답 코드: ${response.statusCode}");
+      debugPrint("🧩 응답 본문: ${response.body}");
+
+      // ✅ 응답 코드 확인
+      if (response.statusCode != 200) {
+        throw Exception("세션 종료 실패: [${response.statusCode}] ${response.body}");
+      }
+
+      debugPrint("🛑 채팅 세션 종료 완료 → $chatSessionId");
+    } catch (e, st) {
+      debugPrint("🚨 closeSession() 오류 발생: $e\n$st");
+      rethrow;
     }
   }
+
 
   /// =======================
   /// ✅ 채팅방 과거 메시지 조회 (GET /api/chat/rooms/{chatSessionId}/messages)
