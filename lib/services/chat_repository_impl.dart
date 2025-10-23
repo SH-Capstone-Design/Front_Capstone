@@ -7,6 +7,7 @@ import 'package:connectbeat/services/chat_api_service.dart';
 import 'package:connectbeat/providers/session_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
+import 'package:connectbeat/services/chat_report_service.dart';
 
 abstract class ChatSocketPort {
   Future<void> connectBase({
@@ -215,33 +216,46 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   /// 🔹 채팅 종료
-  @override
   Future<void> sendEndChat({required String chatSessionId}) async {
-    if (_isDisposed) return;
-
     debugPrint("📤 [채팅 종료 요청] → $chatSessionId");
-
-    // 1️⃣ 서버 종료 이벤트 전송
-    socket.sendEndChat(chatSessionId: chatSessionId);
-
-    // 2️⃣ 로컬 상태 정리만 수행 (UI 갱신은 서버 브로드캐스트 이벤트로)
-    _subscribedRooms.remove(chatSessionId);
-    _messages.removeWhere((m) => m.chatSessionId == chatSessionId);
-  }
-
-  /// 🔹 세션 종료
-  @override
-  Future<void> closeSession(String chatSessionId) async {
-    if (_isDisposed) return;
-
     try {
-      await sendEndChat(chatSessionId: chatSessionId); // 서버 종료 + 로컬 정리
-      await api.closeSession(chatSessionId);          // 서버 DB 종료
-      disconnect();                                    // WebSocket 종료
+      socket.sendEndChat(chatSessionId: chatSessionId);
     } catch (e) {
-      debugPrint("❌ closeSession 오류: $e");
+      debugPrint("⚠️ sendEndChat 실패: $e");
     }
   }
+
+
+  /// 🔹 채팅 세션 종료 + 리포트 생성
+  @override
+  @override
+  Future<void> closeSession(String chatSessionId) async {
+    try {
+      // 1️⃣ 리포트 먼저 생성
+      const feedback = "이번 대화의 감정 분석 결과입니다.";
+      await Future.delayed(const Duration(milliseconds: 500)); // 🔹 DB 커밋 대기
+      final report = await ChatReportService.generateReport(
+        chatSessionId: chatSessionId,
+        feedback: feedback,
+      );
+
+      if (report != null) {
+        debugPrint("✅ 리포트 생성 성공: ${report['reportId']}");
+      } else {
+        debugPrint("⚠️ 리포트 생성 실패 (null 응답)");
+      }
+
+      // 2️⃣ 세션 종료 API 호출
+      await api.closeSession(chatSessionId);
+      debugPrint("🛑 채팅 세션 종료 완료: $chatSessionId");
+    } catch (e, st) {
+      debugPrint("🚨 closeSession() 중 오류 발생: $e\n$st");
+    } finally {
+      disconnect();
+      debugPrint("🔌 STOMP/WebSocket 연결 해제 완료");
+    }
+  }
+
 
   /// 🔹 연결 해제
   void disconnect() {
