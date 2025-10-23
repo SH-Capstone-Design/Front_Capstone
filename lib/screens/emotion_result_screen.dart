@@ -1,72 +1,89 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:connectbeat/core/constants.dart'; // AppConstants.backgroundPath
-
-// 예시 대화 기록 화면
-class ChatHistoryScreen extends StatelessWidget {
-  final String emotion;
-  final int minute;
-
-  const ChatHistoryScreen({super.key, required this.emotion, required this.minute});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          "$emotion 대화 기록",
-          style: const TextStyle(fontFamily: 'GowunBatang', color: Colors.black),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: Colors.black,
-      ),
-      body: Center(
-        child: Text(
-          "$minute분 시점의 $emotion 감정 대화 기록",
-          style: const TextStyle(fontSize: 16, fontFamily: 'GowunBatang', color: Colors.black),
-        ),
-      ),
-    );
-  }
-}
+import 'package:connectbeat/core/constants.dart';
+import 'package:connectbeat/services/chat_report_service.dart';
 
 class EmotionResultScreen extends StatefulWidget {
-  const EmotionResultScreen({super.key});
+  final String chatSessionId;
+  const EmotionResultScreen({super.key, required this.chatSessionId});
 
   @override
   State<EmotionResultScreen> createState() => _EmotionResultScreenState();
 }
 
 class _EmotionResultScreenState extends State<EmotionResultScreen> {
-  final List<String> emotions = ["기쁨", "슬픔", "분노", "불안", "당황", "혐오"];
-  final List<Color> colors = [
-    const Color(0xFFFBF74D),
-    const Color(0xFF84C8FF),
-    const Color(0xFFFF8888),
-    const Color(0xFF95FF98),
-    const Color(0xFFFFCF80),
-    const Color(0xFFEC9FFF),
-  ];
+  bool _loading = true;
+  Map<String, dynamic>? _report;
+  String? _error;
 
-  int selectedIndex = 0;
-  DateTime? _lastTapTime; // 더블탭 감지용
+  @override
+  void initState() {
+    super.initState();
+    _fetchReport();
+  }
 
-  final Map<String, List<double>> emotionData = {
-    "기쁨": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
-    "슬픔": [0.1, 0.2, 0.2, 0.3, 0.3, 0.4, 0.5, 0.5, 0.6, 0.7, 0.8],
-    "분노": [0.2, 0.3, 0.3, 0.4, 0.5, 0.5, 0.6, 0.7, 0.7, 0.8, 0.9],
-    "불안": [0.1, 0.2, 0.2, 0.3, 0.3, 0.4, 0.5, 0.5, 0.6, 0.6, 0.7],
-    "당황": [0.0, 0.1, 0.1, 0.2, 0.2, 0.3, 0.3, 0.4, 0.4, 0.5, 0.5],
-    "혐오": [0.1, 0.1, 0.2, 0.2, 0.3, 0.3, 0.4, 0.5, 0.5, 0.6, 0.6],
-  };
+  /// 🔹 리포트 데이터 불러오기 (AI 감정 분석 완료될 때까지 재시도)
+  Future<void> _fetchReport({int retryCount = 0}) async {
+    const maxRetries = 12; // 최대 재시도 횟수 (12 * 5초 = 60초)
+    const retryDelay = Duration(seconds: 5);
+
+    try {
+      debugPrint("📥 리포트 요청 시도 #$retryCount → ${widget.chatSessionId}");
+      final report =
+      await ChatReportService.fetchReportBySession(widget.chatSessionId);
+
+      // 1️⃣ 404 또는 응답 null → 아직 리포트 생성 안 됨
+      if (report == null) {
+        if (retryCount < maxRetries) {
+          debugPrint("⏳ 리포트 없음 (null) → ${retryDelay.inSeconds}초 후 재시도");
+          await Future.delayed(retryDelay);
+          return _fetchReport(retryCount: retryCount + 1);
+        } else {
+          debugPrint("❌ 최대 재시도 횟수 초과 (리포트 생성 안 됨)");
+          setState(() {
+            _error = "리포트를 불러오지 못했습니다. (생성 지연)";
+            _loading = false;
+          });
+          return;
+        }
+      }
+
+      // 2️⃣ detailedEmotions가 비어 있으면 분석이 아직 완료되지 않은 상태
+      if (report['detailedEmotions'] == null ||
+          (report['detailedEmotions'] as List).isEmpty) {
+        if (retryCount < maxRetries) {
+          debugPrint("⏳ 감정 분석 진행 중... ${retryDelay.inSeconds}초 후 재시도");
+          await Future.delayed(retryDelay);
+          return _fetchReport(retryCount: retryCount + 1);
+        } else {
+          debugPrint("⚠️ 분석 결과 없음 (시간 초과)");
+          setState(() {
+            _error = "감정 분석이 완료되지 않았습니다.";
+            _loading = false;
+          });
+          return;
+        }
+      }
+
+      // 3️⃣ 모든 조건 통과 → 리포트 데이터 세팅
+      setState(() {
+        _report = report;
+        _loading = false;
+      });
+      debugPrint("✅ 리포트 로드 완료: ${report['reportId'] ?? 'N/A'}");
+
+    } catch (e, st) {
+      debugPrint("🚨 리포트 로드 오류: $e\n$st");
+      setState(() {
+        _error = "데이터를 불러오지 못했습니다: $e";
+        _loading = false;
+      });
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
-    String selectedEmotion = emotions[selectedIndex];
-    Color selectedColor = colors[selectedIndex];
-    List<double> selectedData = emotionData[selectedEmotion]!;
-
     final screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
@@ -80,238 +97,171 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              children: [
-                SizedBox(height: screenHeight * 0.01),
+            child: _loading
+                ? const Center(child: CircularProgressIndicator(color: Colors.black))
+                : _error != null
+                ? Center(child: Text(_error!, style: const TextStyle(fontFamily: 'GowunBatang')))
+                : _buildReportContent(screenHeight),
+          ),
+        ),
+      ),
+    );
+  }
 
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8.0),
-                  child: Text(
-                    "감정 분석 결과",
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                      fontFamily: 'GowunBatang',
-                    ),
-                  ),
-                ),
+  Widget _buildReportContent(double screenHeight) {
+    final timeline = _report?['aggregatedTimeline'] ?? {};
+    final points = (timeline['points'] ?? []) as List;
 
-                // 🔹 그래프 영역
-                SizedBox(
-                  height: screenHeight * 0.3,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.8),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 800),
-                        child: LineChart(
-                          key: ValueKey(selectedIndex),
-                          LineChartData(
-                            backgroundColor: Colors.transparent,
-                            minX: 0,
-                            maxX: (selectedData.length - 1).toDouble(),
-                            minY: 0,
-                            maxY: 1.0,
-                            gridData: FlGridData(
-                              show: true,
-                              drawVerticalLine: false,
-                              horizontalInterval: 0.2,
-                              getDrawingHorizontalLine: (value) => FlLine(
-                                  color: Colors.grey.withOpacity(0.3), strokeWidth: 1),
-                            ),
-                            titlesData: FlTitlesData(
-                              bottomTitles: AxisTitles(
-                                sideTitles: SideTitles(
-                                  showTitles: true,
-                                  interval: 1,
-                                  getTitlesWidget: (value, meta) {
-                                    if (value >= 0 && value <= 10) {
-                                      return Padding(
-                                        padding: const EdgeInsets.only(top: 4.0),
-                                        child: Text(
-                                          "${value.toInt()}분",
-                                          style: const TextStyle(
-                                            fontSize: 10,
-                                            fontFamily: 'GowunBatang',
-                                            color: Colors.black,
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                    return const SizedBox.shrink();
-                                  },
-                                ),
-                              ),
-                              leftTitles: AxisTitles(
-                                sideTitles: SideTitles(
-                                  showTitles: true,
-                                  interval: 0.2,
-                                  reservedSize: 28,
-                                  getTitlesWidget: (value, meta) {
-                                    return Text(
-                                      value.toStringAsFixed(1),
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontFamily: 'GowunBatang',
-                                        color: Colors.black,
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                              rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                            ),
-                            borderData: FlBorderData(show: false),
-                            lineBarsData: [
-                              LineChartBarData(
-                                spots: List.generate(
-                                  selectedData.length,
-                                      (index) => FlSpot(index.toDouble(), selectedData[index]),
-                                ),
-                                isCurved: true,
-                                color: selectedColor,
-                                barWidth: 3,
-                                dotData: FlDotData(show: true),
-                              ),
-                            ],
-                            lineTouchData: LineTouchData(
-                              enabled: true,
-                              handleBuiltInTouches: true,
-                              touchTooltipData: LineTouchTooltipData(
-                                // 아예 배경 없앰, 글자만 표시
-                                getTooltipItems: (spots) {
-                                  return spots.map((spot) {
-                                    return LineTooltipItem(
-                                      "${spot.x.toInt()}분: ${spot.y.toStringAsFixed(1)}",
-                                      const TextStyle(
-                                        color: Colors.white,
-                                        fontFamily: 'GowunBatang',
-                                        fontSize: 14,
-                                      ),
-                                    );
-                                  }).toList();
-                                },
-                              ),
-                              touchCallback: (event, response) {
-                                if (response == null || response.lineBarSpots == null) return;
-                                if (event is FlTapUpEvent) {
-                                  final now = DateTime.now();
-                                  if (_lastTapTime == null ||
-                                      now.difference(_lastTapTime!) >
-                                          const Duration(milliseconds: 300)) {
-                                    _lastTapTime = now;
-                                  } else {
-                                    final spot = response.lineBarSpots!.first;
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => ChatHistoryScreen(
-                                          emotion: selectedEmotion,
-                                          minute: spot.x.toInt(),
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                            ),
-                          ),
+    /// 🔹 감정별 데이터 점(분 단위)
+    final Map<String, List<FlSpot>> emotionSpots = {};
+    for (var point in points) {
+      final minute = (point['minute'] ?? 0).toDouble();
+      final avgScores = Map<String, dynamic>.from(point['avgScores'] ?? {});
+      avgScores.forEach((emotion, score) {
+        emotionSpots.putIfAbsent(emotion, () => []);
+        emotionSpots[emotion]!.add(FlSpot(minute, (score as num).toDouble()));
+      });
+    }
+
+    /// 🔹 문장별 상세 감정
+    final detailedEmotions =
+    List<Map<String, dynamic>>.from(_report?['detailedEmotions'] ?? []);
+
+    final colors = [
+      Colors.amber,
+      Colors.pinkAccent,
+      Colors.blueAccent,
+      Colors.redAccent,
+      Colors.green,
+      Colors.purple,
+      Colors.orange,
+      Colors.teal,
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const SizedBox(height: 10),
+        const Text(
+          "감정 분석 리포트",
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'GowunBatang',
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        /// 🔹 감정 추이 그래프
+        Container(
+          height: screenHeight * 0.35,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.85),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: LineChart(
+              LineChartData(
+                minY: 0,
+                maxY: 8,
+                gridData: FlGridData(show: true, drawVerticalLine: false),
+                titlesData: FlTitlesData(
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      interval: 1,
+                      getTitlesWidget: (value, meta) => Text(
+                        "${value.toInt()}분",
+                        style: const TextStyle(
+                          fontFamily: 'GowunBatang',
+                          color: Colors.black,
+                          fontSize: 10,
                         ),
                       ),
                     ),
                   ),
-                ),
-
-                const SizedBox(height: 10),
-
-                // 🔹 감정 선택 바
-                Container(
-                  height: 50,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.8),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      double buttonWidth = constraints.maxWidth / emotions.length;
-
-                      return Stack(
-                        alignment: Alignment.centerLeft,
-                        children: [
-                          AnimatedPositioned(
-                            duration: const Duration(milliseconds: 500),
-                            curve: Curves.easeInOut,
-                            left: buttonWidth * selectedIndex + buttonWidth / 2 - 25,
-                            top: 5,
-                            child: Container(
-                              width: 50,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: colors[selectedIndex].withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                            ),
-                          ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: List.generate(emotions.length, (index) {
-                              final isSelected = index == selectedIndex;
-                              return SizedBox(
-                                width: buttonWidth,
-                                child: GestureDetector(
-                                  onTap: () {
-                                    setState(() {
-                                      selectedIndex = index;
-                                    });
-                                  },
-                                  child: Center(
-                                    child: Text(
-                                      emotions[index],
-                                      style: TextStyle(
-                                        fontWeight: isSelected
-                                            ? FontWeight.bold
-                                            : FontWeight.normal,
-                                        color: Colors.black,
-                                        fontSize: 16,
-                                        fontFamily: 'GowunBatang',
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-
-                // 🔹 감정 분석 리포트 공간
-                Expanded(
-                  child: Center(
-                    child: Text(
-                      "여기에 감정 분석 리포트가 들어갑니다.",
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.black87,
-                        fontFamily: 'GowunBatang',
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      interval: 0.2,
+                      getTitlesWidget: (value, meta) => Text(
+                        value.toStringAsFixed(1),
+                        style: const TextStyle(
+                          fontFamily: 'GowunBatang',
+                          color: Colors.black,
+                          fontSize: 10,
+                        ),
                       ),
                     ),
                   ),
+                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 ),
-              ],
+                borderData: FlBorderData(show: false),
+                lineBarsData: emotionSpots.entries.toList().asMap().entries.map(
+                      (entry) {
+                    final idx = entry.key;
+                    final emotion = entry.value.key;
+                    final spots = entry.value.value;
+                    return LineChartBarData(
+                      isCurved: true,
+                      barWidth: 2,
+                      spots: spots,
+                      color: colors[idx % colors.length],
+                      dotData: FlDotData(show: false),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: colors[idx % colors.length].withOpacity(0.1),
+                      ),
+                      // 감정 이름 툴팁
+                    );
+                  },
+                ).toList(),
+              ),
             ),
           ),
         ),
-      ),
+
+        const SizedBox(height: 10),
+
+        /// 🔹 문장별 감정 분석 결과 리스트
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.85),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: ListView.separated(
+              itemCount: detailedEmotions.length,
+              separatorBuilder: (_, __) => const Divider(height: 8),
+              itemBuilder: (context, index) {
+                final item = detailedEmotions[index];
+                return ListTile(
+                  leading: Text(
+                    item['speaker'] ?? 'N/A',
+                    style: const TextStyle(
+                      fontFamily: 'GowunBatang',
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  title: Text(
+                    item['sentence'] ?? '',
+                    style: const TextStyle(fontFamily: 'GowunBatang'),
+                  ),
+                  subtitle: Text(
+                    "${item['topEmotion']} "
+                        "(${((item['confidence'] ?? 0) * 100).toStringAsFixed(1)}%)",
+                    style: const TextStyle(fontFamily: 'GowunBatang'),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
