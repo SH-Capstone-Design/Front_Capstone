@@ -81,6 +81,8 @@ class _InputCodeScreenState extends ConsumerState<InputCodeScreen> {
       } else if (response.statusCode == 400) {
         final body = jsonDecode(response.body);
         return body['error'] ?? '유효하지 않은 코드입니다.';
+      } else if (response.statusCode == 404) {
+        return '해당 코드를 찾을 수 없습니다. 다시 확인해주세요.';
       } else {
         return '서버 오류가 발생했습니다. (${response.statusCode})';
       }

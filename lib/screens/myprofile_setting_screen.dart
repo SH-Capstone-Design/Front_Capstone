@@ -104,79 +104,85 @@ class _MyProfileSettingScreenState
     }
 
     return Scaffold(
+      extendBodyBehindAppBar: true, // AppBar 뒤로 배경 확장
       appBar: AppBar(
         title: const Text(
           '내 프로필 설정',
           style: TextStyle(fontFamily: 'GowunBatang', color: Colors.black),
         ),
         backgroundColor: Colors.transparent,
-        foregroundColor: Colors.black,
         elevation: 0,
+        foregroundColor: Colors.black,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios),
+          onPressed: () => Navigator.pop(context),
+        ),
+        centerTitle: true,
       ),
       body: Stack(
         children: [
+          // 배경 이미지
           SizedBox.expand(
             child: Image.asset(
               AppConstants.backgroundPath,
               fit: BoxFit.cover,
             ),
           ),
+          // SafeArea + 화면 내용
           SafeArea(
             child: SingleChildScrollView(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: size.width * 0.06),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 20),
-                    Center(
-                      child: GestureDetector(
-                        onTap: _pickImage,
-                        child: CircleAvatar(
-                          radius: 60,
-                          backgroundColor: Colors.grey[200],
-                          backgroundImage: avatar,
-                          child: avatar == null
-                              ? const Icon(Icons.person,
-                              size: 60, color: Colors.grey)
-                              : null,
-                        ),
+              padding: EdgeInsets.symmetric(horizontal: size.width * 0.06),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 100), // AppBar 아래 여백 확보
+                  Center(
+                    child: GestureDetector(
+                      onTap: _pickImage,
+                      child: CircleAvatar(
+                        radius: 60,
+                        backgroundColor: Colors.grey[200],
+                        backgroundImage: avatar,
+                        child: avatar == null
+                            ? const Icon(Icons.person,
+                            size: 60, color: Colors.grey)
+                            : null,
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    const Center(
-                      child: Text(
-                        '프로필 설정',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontFamily: 'GowunBatang',
-                          fontWeight: FontWeight.bold,
-                        ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Center(
+                    child: Text(
+                      '프로필 설정',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontFamily: 'GowunBatang',
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: TextFormField(
-                        controller: _nicknameController,
-                        style: const TextStyle(
-                          fontFamily: 'GowunBatang',
-                          fontSize: 16,
-                        ),
-                        decoration: const InputDecoration(
-                          hintText: '닉네임 설정',
-                          border: UnderlineInputBorder(),
-                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: TextFormField(
+                      controller: _nicknameController,
+                      style: const TextStyle(
+                        fontFamily: 'GowunBatang',
+                        fontSize: 16,
+                      ),
+                      decoration: const InputDecoration(
+                        hintText: '닉네임 설정',
+                        border: UnderlineInputBorder(),
                       ),
                     ),
-                    const SizedBox(height: 40),
-                    RoundedButton(
-                      text: '저장하기',
-                      onPressed: _onSavePressed,
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 40),
+                  RoundedButton(
+                    text: '저장하기',
+                    onPressed: _onSavePressed,
+                  ),
+                  const SizedBox(height: 20),
+                ],
               ),
             ),
           ),

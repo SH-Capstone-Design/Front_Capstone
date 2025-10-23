@@ -353,7 +353,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               fit: BoxFit.contain,
                             ),
                           ),
-                          const SizedBox(height: 8),
                           GestureDetector(
                             onTap: () => _startChat(context, userId, partnerId),
                             child: const Text(

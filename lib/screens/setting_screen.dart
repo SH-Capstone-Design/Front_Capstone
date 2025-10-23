@@ -21,6 +21,9 @@ class SettingScreen extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.black, // 텍스트 검은색
+            ),
             child: const Text(
               '취소',
               style: TextStyle(fontFamily: 'GowunBatang'),
@@ -28,6 +31,9 @@ class SettingScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.black, // 텍스트 검은색
+            ),
             child: const Text(
               '확인',
               style: TextStyle(fontFamily: 'GowunBatang'),
@@ -80,7 +86,7 @@ class SettingScreen extends StatelessWidget {
                   // 화면 제목
                   const Center(
                     child: Text(
-                      '설정',
+                      '⚙️ 설정',
                       style: TextStyle(
                         fontFamily: 'GowunBatang',
                         fontSize: 30,

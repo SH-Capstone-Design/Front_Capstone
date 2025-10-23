@@ -1,6 +1,3 @@
-// lib/widgets/message_input_bar.dart
-// 하단 입력창 + 전송 버튼. onSend 콜백으로 상위에서 전송 로직을 주입합니다.
-
 import 'package:flutter/material.dart';
 
 class MessageInputBar extends StatefulWidget {
@@ -10,7 +7,6 @@ class MessageInputBar extends StatefulWidget {
     this.enabled = true,
   });
 
-  /// 전송 콜백. 상위에서 repo.sendMessage(...)를 호출하도록 연결합니다.
   final Future<void> Function(String text) onSend;
   final bool enabled;
 
@@ -59,11 +55,13 @@ class _MessageInputBarState extends State<MessageInputBar> {
                 minLines: 1,
                 maxLines: 4,
                 textInputAction: TextInputAction.newline,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: '메시지를 입력하세요',
                   border: OutlineInputBorder(borderSide: BorderSide.none),
                   isDense: true,
-                  contentPadding: EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                 ),
               ),
             ),
@@ -71,7 +69,7 @@ class _MessageInputBarState extends State<MessageInputBar> {
             IconButton(
               tooltip: '보내기',
               onPressed: (_sending || !widget.enabled) ? null : _handleSend,
-              icon: const Icon(Icons.send),
+              icon: Icon(Icons.send, color: Colors.pink[200]),
             ),
           ],
         ),

@@ -15,11 +15,10 @@ class MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 배경색 조정 (ConnectBeat 배경과 조화)
     final bgColor = isMine
-        ? const Color(0xFFFFC1CC).withOpacity(0.85) // 연핑크
-        : const Color(0xFFF0F0F0).withOpacity(0.75); // 연회색
-    final textColor = Colors.black; // 글자색 검은색
+        ? Colors.white
+        : const Color(0xFFFFDEFF); // 연한 파스텔 핑크
+    final textColor = Colors.black87;
     final align = isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start;
     final mainAxis = isMine ? MainAxisAlignment.end : MainAxisAlignment.start;
 
@@ -44,12 +43,12 @@ class MessageBubble extends StatelessWidget {
             mainAxisAlignment: mainAxis,
             children: <Widget>[
               ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 320),
+                constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: bgColor,
                     borderRadius: radius,
-                    boxShadow: const <BoxShadow>[
+                    boxShadow: const [
                       BoxShadow(
                         color: Colors.black12,
                         blurRadius: 4,
@@ -58,10 +57,7 @@ class MessageBubble extends StatelessWidget {
                     ],
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 10,
-                      horizontal: 14,
-                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
                     child: Text(
                       message.content,
                       style: TextStyle(color: textColor, fontSize: 16),
@@ -75,7 +71,7 @@ class MessageBubble extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                _formatTime(DateTime.now()), // 서버에서 시간 안주므로 임시 처리
+                _formatTime(DateTime.now()),
                 style: const TextStyle(fontSize: 11, color: Colors.black45),
               ),
             ),

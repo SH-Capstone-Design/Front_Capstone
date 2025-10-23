@@ -38,6 +38,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/images/clothes/
+    - assets/images/backgrounds/
     - .env
   fonts:
     - family: GamjaFlower

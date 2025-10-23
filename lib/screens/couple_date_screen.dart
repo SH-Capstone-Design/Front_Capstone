@@ -88,9 +88,25 @@ class _CoupleDateScreenState extends ConsumerState<CoupleDateScreen> {
       months[selectedMonthIndex],
       days[selectedDayIndex],
     );
+
     await ref.read(coupleDateProvider.notifier).save(selectedDate);
+
+    // ✅ 저장 완료 메시지 표시
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          '디데이가 설정되었습니다 💖',
+          style: TextStyle(fontFamily: 'GowunBatang'),
+        ),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.pinkAccent,
+      ),
+    );
+
     Navigator.pop(context);
   }
+
 
   Widget _buildPicker(List<int> items, FixedExtentScrollController controller,
       ValueChanged<int> onChanged, String suffix) {
@@ -142,22 +158,25 @@ class _CoupleDateScreenState extends ConsumerState<CoupleDateScreen> {
     final dDayText = ref.watch(coupleDateProvider.notifier).getDDayText();
 
     return Scaffold(
+      extendBodyBehindAppBar: true, // 배경 이미지가 AppBar 뒤로 가도록
       appBar: AppBar(
         title: const Text(
           '디데이 설정',
           style: TextStyle(
             fontFamily: 'GowunBatang',
             color: Colors.black,
+            fontSize: 22,
+            fontWeight: FontWeight.w600,
           ),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: Colors.black,
+        centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios),
           onPressed: () => Navigator.pop(context),
         ),
-        centerTitle: true,
       ),
       body: Stack(
         children: [
@@ -169,48 +188,46 @@ class _CoupleDateScreenState extends ConsumerState<CoupleDateScreen> {
           ),
           SafeArea(
             child: SingleChildScrollView(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(height: size.height * 0.15),
-                    Text(
-                      dDayText,
-                      style: const TextStyle(
-                        fontFamily: 'GowunBatang',
-                        fontSize: 22,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black,
-                        shadows: [
-                          Shadow(
-                            blurRadius: 4,
-                            color: Colors.black45,
-                            offset: Offset(1, 1),
-                          ),
-                        ],
-                      ),
-                      textAlign: TextAlign.center,
+              padding: EdgeInsets.symmetric(horizontal: size.width * 0.06),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(height: size.height * 0.15),
+                  Text(
+                    dDayText,
+                    style: const TextStyle(
+                      fontFamily: 'GowunBatang',
+                      fontSize: 22,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                      shadows: [
+                        Shadow(
+                          blurRadius: 4,
+                          color: Colors.black45,
+                          offset: Offset(1, 1),
+                        ),
+                      ],
                     ),
-                    SizedBox(height: size.height * 0.03),
-                    SizedBox(
-                      height: size.height * 0.25,
-                      child: Row(
-                        children: [
-                          _buildPicker(years, yearController, _onYearChanged, '년'),
-                          _buildPicker(months, monthController, _onMonthChanged, '월'),
-                          _buildPicker(days, dayController, _onDayChanged, '일'),
-                        ],
-                      ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: size.height * 0.03),
+                  SizedBox(
+                    height: size.height * 0.25,
+                    child: Row(
+                      children: [
+                        _buildPicker(years, yearController, _onYearChanged, '년'),
+                        _buildPicker(months, monthController, _onMonthChanged, '월'),
+                        _buildPicker(days, dayController, _onDayChanged, '일'),
+                      ],
                     ),
-                    SizedBox(height: size.height * 0.05),
-                    RoundedButton(
-                      text: '저장',
-                      onPressed: _saveDate,
-                    ),
-                    SizedBox(height: size.height * 0.05),
-                  ],
-                ),
+                  ),
+                  SizedBox(height: size.height * 0.05),
+                  RoundedButton(
+                    text: '저장',
+                    onPressed: _saveDate,
+                  ),
+                  SizedBox(height: size.height * 0.05),
+                ],
               ),
             ),
           ),
