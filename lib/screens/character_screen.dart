@@ -11,8 +11,8 @@ class CharacterScreen extends StatefulWidget {
 }
 
 class _CharacterScreenState extends State<CharacterScreen> {
-  String selectedCategory = '상의';
-  final List<String> categories = ['상의', '하의'];
+  String selectedCategory = '옷';
+  final List<String> categories = ['옷', '배경'];
 
   // 👋 손 흔드는 애니메이션 관련
   late Timer _handTimer;
@@ -27,17 +27,53 @@ class _CharacterScreenState extends State<CharacterScreen> {
     'assets/images/ConnectBeatCharacter2.png',
   ];
 
+  // 카테고리별 이미지 + 가격 정보
+  final Map<String, List<Map<String, dynamic>>> categoryItems = {
+    '옷': [
+      {'name': '흰 잠옷', 'image': 'assets/images/clothes/cloth_1.png', 'price': 30},
+      {'name': '보라 잠옷', 'image': 'assets/images/clothes/cloth_2.png', 'price': 30},
+      {'name': '파스텔 잠옷', 'image': 'assets/images/clothes/cloth_3.png', 'price': 45},
+      {'name': '짱구 잠옷', 'image': 'assets/images/clothes/cloth_4.png', 'price': 100},
+      {'name': '노란 잠옷', 'image': 'assets/images/clothes/cloth_5.png', 'price': 30},
+      {'name': '빨간 자켓', 'image': 'assets/images/clothes/cloth_6.png', 'price': 50},
+      {'name': '검정 자켓', 'image': 'assets/images/clothes/cloth_7.png', 'price': 50},
+      {'name': '파스텔 잠옷2', 'image': 'assets/images/clothes/cloth_8.png', 'price': 45},
+      {'name': '커넥트비트 대표옷', 'image': 'assets/images/clothes/cloth_9.png', 'price': 60},
+      {'name': '산타 옷', 'image': 'assets/images/clothes/cloth_10.png', 'price': 1000},
+      {'name': '루돌프 옷', 'image': 'assets/images/clothes/cloth_11.png', 'price': 1000},
+      {'name': '노란 우비', 'image': 'assets/images/clothes/cloth_12.png', 'price': 250},
+      {'name': '연두 우비', 'image': 'assets/images/clothes/cloth_13.png', 'price': 250},
+      {'name': '보라 우비', 'image': 'assets/images/clothes/cloth_14.png', 'price': 250},
+      {'name': '빨강 우비', 'image': 'assets/images/clothes/cloth_15.png', 'price': 250},
+    ],
+    '배경': [
+      {'name': '배경 1', 'image': 'assets/images/backgrounds/bg_1.png', 'price': 300},
+      {'name': '배경 2', 'image': 'assets/images/backgrounds/bg_2.png', 'price': 300},
+      {'name': '배경 3', 'image': 'assets/images/backgrounds/bg_3.png', 'price': 300},
+      {'name': '배경 4', 'image': 'assets/images/backgrounds/bg_4.png', 'price': 300},
+      {'name': '배경 5', 'image': 'assets/images/backgrounds/bg_5.png', 'price': 300},
+      {'name': '배경 6', 'image': 'assets/images/backgrounds/bg_6.png', 'price': 300},
+
+    ],
+  };
+
   @override
   void initState() {
     super.initState();
 
-    // 처음에 캐릭터 기본 이미지로 고정
     _handIndex = 0;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // 손 흔드는 캐릭터 이미지 미리 로딩
       for (var imagePath in _handImages) {
         precacheImage(AssetImage(imagePath), context);
       }
+      // 카테고리 아이템 이미지 미리 로딩
+      categoryItems.forEach((_, items) {
+        for (var item in items) {
+          precacheImage(AssetImage(item['image']), context);
+        }
+      });
     });
 
     _handTimer = Timer.periodic(const Duration(milliseconds: 450), (timer) {
@@ -54,7 +90,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
     super.dispose();
   }
 
-  // ✅ 커스텀 다이얼로그
+  // 구매 다이얼로그
   Future<void> _showPurchaseDialog(String itemName) async {
     return showDialog(
       context: context,
@@ -69,7 +105,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
+              const Text(
                 '구매 확인',
                 style: TextStyle(
                   fontSize: 22,
@@ -120,6 +156,8 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final items = categoryItems[selectedCategory]!;
+
     return Stack(
       children: [
         SizedBox.expand(
@@ -179,7 +217,6 @@ class _CharacterScreenState extends State<CharacterScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: categories.map((category) {
-                    final isSelected = selectedCategory == category;
                     return Expanded(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -203,21 +240,92 @@ class _CharacterScreenState extends State<CharacterScreen> {
                   color: Colors.white.withOpacity(0.2),
                   padding: const EdgeInsets.all(8),
                   child: GridView.builder(
-                    gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 3,
                       crossAxisSpacing: 8,
                       mainAxisSpacing: 8,
                       childAspectRatio: 1,
                     ),
-                    itemCount: 6,
+                    itemCount: items.length,
                     itemBuilder: (context, index) {
-                      final itemName = '$selectedCategory ${index + 1}';
+                      final item = items[index];
+                      final itemName = item['name'];
+                      final imagePath = item['image'];
+                      final price = item['price'];
+
                       return GestureDetector(
                         onTap: () => _showPurchaseDialog(itemName),
-                        child: Container(
-                          color: Colors.pinkAccent.withOpacity(0.5),
-                          child: Center(child: Text(itemName)),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          curve: Curves.easeInOut,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.white.withOpacity(0.2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 6,
+                                offset: const Offset(2, 2),
+                              ),
+                            ],
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.4),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.asset(
+                                  imagePath,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                ),
+                              ),
+
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  color: Colors.black.withOpacity(0.15),
+                                ),
+                              ),
+
+                              Positioned(
+                                bottom: 6,
+                                left: 6,
+                                right: 6,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.5),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Image.asset(
+                                        'assets/images/ConnectBeat_coin.png',
+                                        width: 16,
+                                        height: 16,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '$price 코인',
+                                        style: const TextStyle(
+                                          fontFamily: 'GowunBatang',
+                                          color: Colors.white,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     },

@@ -46,12 +46,15 @@ class ConnectBeatApp extends StatelessWidget {
       title: 'ConnectBeat',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        scaffoldBackgroundColor: const Color(0xFFFFF8FC),
+        scaffoldBackgroundColor: const Color(0xFFFFFFFF),
         fontFamily: 'GowunBatang',
         textTheme: const TextTheme(
           bodyMedium: TextStyle(color: Colors.black),
         ),
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.pinkAccent),
+        colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFFFFEEFF), // 밝은 로즈핑크
+        brightness: Brightness.light,       // 밝은 테마 유지
+        ),
       ),
       // ✅ 글로벌 키 적용
       navigatorKey: navigatorKey,

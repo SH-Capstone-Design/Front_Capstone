@@ -46,7 +46,7 @@ class CoupleManageScreen extends StatelessWidget {
           const SnackBar(
             content: Text(
               "로그인이 필요합니다.",
-              style: TextStyle(fontFamily: 'GamjaFlower'),
+              style: TextStyle(fontFamily: 'GowunBatang'),
             ),
           ),
         );
@@ -68,7 +68,7 @@ class CoupleManageScreen extends StatelessWidget {
           const SnackBar(
             content: Text(
               "커플이 해제되었습니다.",
-              style: TextStyle(fontFamily: 'GamjaFlower'),
+              style: TextStyle(fontFamily: 'GowunBatang'),
             ),
           ),
         );
@@ -80,7 +80,7 @@ class CoupleManageScreen extends StatelessWidget {
           SnackBar(
             content: Text(
               "커플 해제에 실패했습니다. (${response.statusCode})",
-              style: const TextStyle(fontFamily: 'GamjaFlower'),
+              style: const TextStyle(fontFamily: 'GowunBatang'),
             ),
           ),
         );
