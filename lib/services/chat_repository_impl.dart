@@ -114,35 +114,28 @@ class ChatRepositoryImpl implements ChatRepository {
         chatSessionId: chatSessionId,
         onRoomEvent: (data) {
           try {
-            // ✅ 이벤트 수신 로그
             debugPrint("📨 [RoomEvent 수신] → ${data.toString()}");
 
             if (data.containsKey("eventType")) {
               final eventType = data['eventType'];
 
-              // 🔹 채팅 종료 이벤트 별도 처리
               if (eventType == "CONVERSATION_ENDED") {
                 debugPrint("❌ [채팅 종료 감지] → $chatSessionId");
 
-                // 이벤트 먼저 스트림에 전달
                 final event = ChatRoomEvent.fromJson(data);
                 _eventController.add(event);
 
-                // 로컬 상태 정리
                 _subscribedRooms.remove(chatSessionId);
                 _messages.removeWhere((m) => m.chatSessionId == chatSessionId);
-
-                return; // 종료 이벤트 처리 후 바로 리턴
+                return;
               }
 
-              // 일반 이벤트 처리
               final event = ChatRoomEvent.fromJson(data);
               debugPrint("🔥 [이벤트 타입 수신] → ${event.eventType}");
               _eventController.add(event);
             } else if (data.containsKey("senderId") && data.containsKey("content")) {
               final msg = ChatMessage.fromJson(data);
 
-              // ✅ 중복 메시지 방지
               final alreadyExists = _messages.any(
                     (m) => m.senderId == msg.senderId && m.content == msg.content,
               );
@@ -215,25 +208,28 @@ class ChatRepositoryImpl implements ChatRepository {
     socket.sendJoin(chatSessionId: chatSessionId);
   }
 
-  /// 🔹 채팅 종료
+  /// 🔹 채팅 종료 (STOMP 브로드캐스트)
+  @override
   Future<void> sendEndChat({required String chatSessionId}) async {
+    if (_isDisposed) return;
     debugPrint("📤 [채팅 종료 요청] → $chatSessionId");
     try {
       socket.sendEndChat(chatSessionId: chatSessionId);
+      _subscribedRooms.remove(chatSessionId);
+      _messages.removeWhere((m) => m.chatSessionId == chatSessionId);
     } catch (e) {
       debugPrint("⚠️ sendEndChat 실패: $e");
     }
   }
 
-
   /// 🔹 채팅 세션 종료 + 리포트 생성
   @override
-  @override
   Future<void> closeSession(String chatSessionId) async {
+    if (_isDisposed) return;
     try {
       // 1️⃣ 리포트 먼저 생성
       const feedback = "이번 대화의 감정 분석 결과입니다.";
-      await Future.delayed(const Duration(milliseconds: 500)); // 🔹 DB 커밋 대기
+      await Future.delayed(const Duration(milliseconds: 500)); // DB 커밋 대기
       final report = await ChatReportService.generateReport(
         chatSessionId: chatSessionId,
         feedback: feedback,
@@ -255,7 +251,6 @@ class ChatRepositoryImpl implements ChatRepository {
       debugPrint("🔌 STOMP/WebSocket 연결 해제 완료");
     }
   }
-
 
   /// 🔹 연결 해제
   void disconnect() {

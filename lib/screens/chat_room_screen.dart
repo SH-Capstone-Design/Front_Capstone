@@ -59,7 +59,6 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     final chatSessionId = widget.room.chatSessionId;
 
     await repo.connectBase();
-    await repo.subscribeRoom(chatSessionId: chatSessionId);
 
     // B가 입장할 때만 join 전송
     if (!widget.autoStart) {
@@ -93,6 +92,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         case "USER_JOINED":
           if (event.payload?['userId'] != widget.currentUserId) {
             _addSystemMessage("💞 상대방이 채팅방에 입장했습니다.");
+
             if (!_chatStarted) {
               _chatStarted = true;
               _addSystemMessage("🗣️ 대화가 시작되었습니다! 10분 타이머 시작");
@@ -162,7 +162,6 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       await Future.delayed(const Duration(milliseconds: 300));
 
       // 3️⃣ REST API는 내가 직접 종료할 때만 호출
-      // (상대방 이벤트에서는 호출 안 함)
       // await repo.api.closeSession(widget.room.chatSessionId);
 
       // 4️⃣ EmotionResult로 이동
@@ -188,7 +187,6 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     _addSystemMessage("⏰ 상대방이 채팅을 종료했습니다.");
 
     try {
-      // REST 호출 제거 — 이미 서버에서 종료 처리됨
       await Future.delayed(const Duration(milliseconds: 500));
 
       if (mounted) {
