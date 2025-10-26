@@ -60,7 +60,7 @@ class ChatReportListScreen extends ConsumerWidget {
                   itemCount: reports.length,
                   itemBuilder: (context, index) {
                     final report = reports[index];
-                    final reportId = report['reportId'] ?? 'N/A';
+                    final chatSessionId = report['chatSessionId'] ?? 'N/A'; // 수정
                     final summary = report['shortFeedbackSummary'] ?? '';
                     final createdAt = report['createdAt']?.substring(0, 10) ?? '';
 
@@ -73,7 +73,7 @@ class ChatReportListScreen extends ConsumerWidget {
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         title: Text(
-                          '리포트 $reportId',
+                          '세션 $chatSessionId',
                           style: const TextStyle(
                             fontFamily: 'GowunBatang',
                             fontSize: infoFontSize,
@@ -100,7 +100,9 @@ class ChatReportListScreen extends ConsumerWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ChatReportDetailScreen(reportId: reportId),
+                              builder: (_) => ChatReportDetailScreen(
+                                chatSessionId: chatSessionId, // 수정
+                              ),
                             ),
                           );
                         },

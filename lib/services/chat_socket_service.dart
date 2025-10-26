@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:stomp_dart_client/stomp.dart';
 import 'package:stomp_dart_client/stomp_config.dart';
 import 'package:stomp_dart_client/stomp_frame.dart';
-import 'chat_repository_impl.dart';
+import 'package:connectbeat/services/chat_repository_impl.dart';
 
 class StompSocketService implements ChatSocketPort {
   final String url;
@@ -11,6 +11,7 @@ class StompSocketService implements ChatSocketPort {
   final bool printDebugLog;
 
   StompClient? _stompClient;
+  final Set<String> _subscribedRooms = {}; // 중복 구독 방지
   bool get isConnected => _stompClient?.connected ?? false;
 
   StompSocketService({
@@ -39,6 +40,7 @@ class StompSocketService implements ChatSocketPort {
         onConnect: (frame) {
           if (printDebugLog) print("✅ STOMP 연결 성공");
 
+          // 개인 이벤트 구독
           _stompClient!.subscribe(
             destination: '/user/queue/events',
             callback: (f) {
@@ -51,6 +53,7 @@ class StompSocketService implements ChatSocketPort {
               }
             },
           );
+
           if (!completer.isCompleted) completer.complete();
         },
         onWebSocketError: (err) {
@@ -66,7 +69,6 @@ class StompSocketService implements ChatSocketPort {
     await completer.future;
   }
 
-  @override
   Future<void> subscribeRoom({
     required String chatSessionId,
     required void Function(Map<String, dynamic>) onRoomEvent,
@@ -76,11 +78,16 @@ class StompSocketService implements ChatSocketPort {
       return;
     }
 
+    if (_subscribedRooms.contains(chatSessionId)) {
+      if (printDebugLog) print("⚠️ 이미 구독됨 → $chatSessionId");
+      return;
+    }
+
     final destination = '/topic/chat/room/$chatSessionId';
+
     _stompClient!.subscribe(
       destination: destination,
       callback: (frame) {
-        print('🔥 이벤트 수신: ${frame.body}');
         if (frame.body == null) return;
         try {
           final data = jsonDecode(frame.body!);
@@ -90,8 +97,19 @@ class StompSocketService implements ChatSocketPort {
         }
       },
     );
-    print('📡 방 구독 완료: /topic/chat/room/$chatSessionId');
-    if (printDebugLog) print("📡 방 구독 완료: $destination");
+
+    _subscribedRooms.add(chatSessionId);
+    if (printDebugLog) print("📡 방 구독 완료 → $destination");
+  }
+
+
+  /// STOMP 연결만 해제, 구독 상태 유지
+  void clearConnection() {
+    if (_stompClient != null) {
+      _stompClient!.deactivate();
+      _stompClient = null;
+      if (printDebugLog) print("🔌 STOMP 연결 해제 (구독 상태는 유지)");
+    }
   }
 
   @override
@@ -116,13 +134,13 @@ class StompSocketService implements ChatSocketPort {
       "chatSessionId": chatSessionId,
       "inviteeId": inviteeId,
     });
+    if (printDebugLog) print("📨 초대 전송 → $chatSessionId to $inviteeId");
   }
 
   @override
   void sendJoin({required String chatSessionId}) {
     _send('/app/chat/join', {"chatSessionId": chatSessionId});
   }
-
 
   void _send(String dest, Map<String, dynamic> data) {
     if (!isConnected) {
@@ -134,23 +152,25 @@ class StompSocketService implements ChatSocketPort {
 
   @override
   void sendEndChat({required String chatSessionId}) {
-    if (_stompClient == null || !_stompClient!.connected) {
-      print("⚠️ STOMP 연결이 끊김, 종료 요청 실패");
-      return;
-    }
     _send('/app/chat/end', {"chatSessionId": chatSessionId});
     if (printDebugLog) print("📤 [SEND] /app/chat/end → $chatSessionId");
+
+    _subscribedRooms.remove(chatSessionId); // 대화 종료 시 구독 제거
   }
 
-
+  @override
+  void sendCancel({required String chatSessionId}) {
+    _send('/app/chat/cancel', {"chatSessionId": chatSessionId});
+    if (printDebugLog) print("📤 [SEND] /app/chat/cancel → $chatSessionId");
+  }
 
   @override
   void disconnect() {
-    if (_stompClient == null) return;
-    if (_stompClient!.connected) {
+    if (_stompClient != null) {
       _stompClient!.deactivate();
-      if (printDebugLog) print("🔌 STOMP 정상 종료");
+      _stompClient = null;
+      _subscribedRooms.clear();
+      if (printDebugLog) print("🔌 STOMP 정상 종료 및 모든 구독 제거");
     }
-    _stompClient = null;
   }
 }

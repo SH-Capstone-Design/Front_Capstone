@@ -40,6 +40,22 @@ flutter:
     - assets/images/
     - assets/images/clothes/
     - assets/images/backgrounds/
+    - assets/images/characters/ch_0/
+    - assets/images/characters/ch_1/
+    - assets/images/characters/ch_2/
+    - assets/images/characters/ch_3/
+    - assets/images/characters/ch_4/
+    - assets/images/characters/ch_5/
+    - assets/images/characters/ch_6/
+    - assets/images/characters/ch_7/
+    - assets/images/characters/ch_8/
+    - assets/images/characters/ch_9/
+    - assets/images/characters/ch_10/
+    - assets/images/characters/ch_11/
+    - assets/images/characters/ch_12/
+    - assets/images/characters/ch_13/
+    - assets/images/characters/ch_14/
+    - assets/images/characters/ch_15/
     - .env
   fonts:
     - family: GamjaFlower
