@@ -7,7 +7,7 @@ import 'package:connectbeat/services/auth_service.dart';
 import 'package:connectbeat/services/code_websocket_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:connectbeat/core/constants.dart';
-import 'package:connectbeat/main.dart'; // 글로벌 navigatorKey, messengerKey
+import 'package:connectbeat/main.dart';
 
 class CreateCodeScreen extends StatefulWidget {
   const CreateCodeScreen({super.key});

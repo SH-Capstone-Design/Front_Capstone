@@ -1,3 +1,4 @@
+import 'package:connectbeat/screens/chat_report_list_screen.dart';
 import 'package:flutter/material.dart';
 
 // ✅ 추가된 화면 import
@@ -39,18 +40,6 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const CoupleDateScreen());
       case '/setting':
         return MaterialPageRoute(builder: (_) => const SettingScreen());
-      // case '/create-chat':
-      //   return MaterialPageRoute(builder: (_) => const CreateChatScreen());
-
-    // case '/invite-partner':
-    //   final args = settings.arguments as Map<String, dynamic>;
-    //   return MaterialPageRoute(
-    //     builder: (_) => InvitePartnerScreen(
-    //       chatSessionId: args['chatSessionId'],
-    //       inviteeId: args['inviteeId'],
-    //     ),
-    //   );
-
       case '/couple-manage':
         return MaterialPageRoute(builder: (_) => const CoupleManageScreen());
       case '/myprofile-setting':
@@ -59,6 +48,13 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const SplashScreen());
       case '/main':
         return MaterialPageRoute(builder: (_) => const MainScreen());
+
+      case '/reportlist':
+        final args = settings.arguments as Map<String, dynamic>?;
+        final coupleId = args?['coupleId'] ?? 0;
+        return MaterialPageRoute(
+          builder: (_) => ChatReportListScreen(coupleId: coupleId),
+        );
 
       case '/emotion-result':
         final args = settings.arguments;

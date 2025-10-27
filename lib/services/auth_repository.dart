@@ -73,7 +73,7 @@ class AuthRepository {
 
   /// ✅ 커플 해제 (/couple/unlink)
   Future<void> unlinkCouple() async {
-    final url = Uri.parse('$baseUrl/couple/unlink');
+    final url = Uri.parse('$baseUrl/couples/unlink');
 
     final token = await AuthService.getToken();
     if (token == null) {

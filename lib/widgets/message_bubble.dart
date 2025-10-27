@@ -7,22 +7,32 @@ class MessageBubble extends StatelessWidget {
     required this.message,
     required this.isMine,
     this.showTime = true,
+    this.showProfile = true, // 연속 메시지 시 false로 처리 가능
   });
 
   final ChatMessage message;
   final bool isMine;
   final bool showTime;
+  final bool showProfile;
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = isMine
-        ? Colors.white
-        : const Color(0xFFFFDEFF); // 연한 파스텔 핑크
-    final textColor = Colors.black87;
-    final align = isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start;
-    final mainAxis = isMine ? MainAxisAlignment.end : MainAxisAlignment.start;
+    final isSystem = message.senderId == "system";
 
-    final radius = isMine
+    final bgColor = isSystem
+        ? Colors.black.withOpacity(0.3)
+        : (isMine ? Colors.pinkAccent : const Color(0xFFFFDEFF));
+
+    final textColor = isSystem
+        ? Colors.white
+        : (isMine ? Colors.white : Colors.black87);
+
+    final align = isMine || isSystem ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+    final mainAxis = isMine || isSystem ? MainAxisAlignment.end : MainAxisAlignment.start;
+
+    final radius = isSystem
+        ? BorderRadius.circular(12)
+        : (isMine
         ? const BorderRadius.only(
       topLeft: Radius.circular(16),
       topRight: Radius.circular(16),
@@ -32,16 +42,30 @@ class MessageBubble extends StatelessWidget {
       topLeft: Radius.circular(16),
       topRight: Radius.circular(16),
       bottomRight: Radius.circular(16),
-    );
+    ));
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
       child: Column(
         crossAxisAlignment: align,
-        children: <Widget>[
+        children: [
           Row(
             mainAxisAlignment: mainAxis,
-            children: <Widget>[
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!isMine && !isSystem && showProfile)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: CircleAvatar(
+                    radius: 16,
+                    backgroundImage: message.senderProfileUrl != null
+                        ? NetworkImage(message.senderProfileUrl!)
+                        : null,
+                    child: message.senderProfileUrl == null
+                        ? const Icon(Icons.person, size: 16)
+                        : null,
+                  ),
+                ),
               ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
                 child: DecoratedBox(
@@ -58,20 +82,44 @@ class MessageBubble extends StatelessWidget {
                   ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-                    child: Text(
-                      message.content,
-                      style: TextStyle(color: textColor, fontSize: 16),
+                    child: Column(
+                      crossAxisAlignment: isMine || isSystem
+                          ? CrossAxisAlignment.end
+                          : CrossAxisAlignment.start,
+                      children: [
+                        if (!isMine && !isSystem && showProfile && message.senderName != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Text(
+                              message.senderName!,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ),
+                        Text(
+                          message.content,
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: isSystem ? 12 : 16,
+                            fontStyle: isSystem ? FontStyle.italic : FontStyle.normal,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
+              if (isMine) const SizedBox(width: 32),
             ],
           ),
-          if (showTime)
+          if (showTime && !isSystem && message.sentTime != null)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                _formatTime(DateTime.now()),
+                _formatTime(message.sentTime!),
                 style: const TextStyle(fontSize: 11, color: Colors.black45),
               ),
             ),

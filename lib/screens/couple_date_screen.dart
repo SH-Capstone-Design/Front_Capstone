@@ -198,7 +198,7 @@ class _CoupleDateScreenState extends ConsumerState<CoupleDateScreen> {
                     style: const TextStyle(
                       fontFamily: 'GowunBatang',
                       fontSize: 22,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.normal,
                       color: Colors.black,
                       shadows: [
                         Shadow(

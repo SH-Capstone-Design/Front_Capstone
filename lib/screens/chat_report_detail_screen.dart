@@ -1,18 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/chat_report_provider.dart';
-import '../core/constants.dart';
+import 'package:connectbeat/services/chat_report_service.dart';
+import 'package:connectbeat/core/constants.dart';
 
-class ChatReportDetailScreen extends ConsumerWidget {
-  final String reportId;
-  const ChatReportDetailScreen({super.key, required this.reportId});
+class ChatReportDetailScreen extends StatelessWidget {
+  final String chatSessionId;
+  const ChatReportDetailScreen({super.key, required this.chatSessionId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final reportAsync = ref.watch(chatReportDetailProvider(reportId));
-
+  Widget build(BuildContext context) {
     const titleFontSize = 22.0;
     const infoFontSize = 18.0;
+    const feedback = "이번 대화의 감정 분석 결과입니다.";
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -39,13 +37,28 @@ class ChatReportDetailScreen extends ConsumerWidget {
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: reportAsync.when(
-              data: (report) {
-                // report가 null인지 먼저 체크
-                if (report == null) {
+            child: FutureBuilder<Map<String, dynamic>?>(
+              future: ChatReportService.generateReport(
+                chatSessionId, // GET용으로 chatSessionId만 전달
+              ),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                } else if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      '에러: ${snapshot.error}',
+                      style: const TextStyle(
+                        fontFamily: 'GowunBatang',
+                        fontSize: infoFontSize,
+                        color: Colors.black,
+                      ),
+                    ),
+                  );
+                } else if (!snapshot.hasData || snapshot.data == null) {
                   return const Center(
                     child: Text(
-                      '리포트 데이터를 불러오지 못했습니다.',
+                      '리포트를 불러오지 못했습니다.',
                       style: TextStyle(
                         fontFamily: 'GowunBatang',
                         fontSize: infoFontSize,
@@ -55,7 +68,9 @@ class ChatReportDetailScreen extends ConsumerWidget {
                   );
                 }
 
+                final report = snapshot.data!;
                 final detailedEmotions = report['detailedEmotions'] as List<dynamic>? ?? [];
+
                 if (detailedEmotions.isEmpty) {
                   return const Center(
                     child: Text(
@@ -122,17 +137,6 @@ class ChatReportDetailScreen extends ConsumerWidget {
                   },
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, st) => Center(
-                child: Text(
-                  '에러: $err',
-                  style: const TextStyle(
-                    fontFamily: 'GowunBatang',
-                    fontSize: infoFontSize,
-                    color: Colors.black,
-                  ),
-                ),
-              ),
             ),
           ),
         ),

@@ -109,11 +109,18 @@ Future<void> signInWithKakao(BuildContext context) async {
   }
 }
 
-/// ✅ 카카오톡 앱으로 로그인
+/// ✅ 카카오톡 앱으로 로그인 (시뮬레이터 호환 포함)
 Future<void> loginWithKakaoAccount(BuildContext context) async {
   print("🔥 loginWithKakaoAccount() 실행");
 
-  if (await isKakaoTalkInstalled()) {
+  bool isTalkInstalled = false;
+  try {
+    isTalkInstalled = await isKakaoTalkInstalled();
+  } catch (e) {
+    print("⚠️ 시뮬레이터에서는 isKakaoTalkInstalled() 호출 불가, fallback 사용");
+  }
+
+  if (isTalkInstalled) {
     try {
       OAuthToken token = await UserApi.instance.loginWithKakaoTalk();
       _logger.info('카카오톡 로그인 성공: ${token.accessToken}');
@@ -124,17 +131,21 @@ Future<void> loginWithKakaoAccount(BuildContext context) async {
       }
     } catch (error) {
       if (error is PlatformException && error.code == 'CANCELED') return;
+      print("⚠️ 카카오톡 로그인 실패, fallback 호출");
       await _loginWithKakaoAccountFallback(context);
     }
   } else {
+    // 시뮬레이터 또는 카톡 설치 안 된 경우
+    print("ℹ️ KakaoTalk 설치 안됨 → Fallback 로그인으로 진행");
     await _loginWithKakaoAccountFallback(context);
   }
 }
 
-/// ✅ 카카오계정 로그인 (Fallback)
+/// ✅ 카카오계정 로그인 (웹 기반 fallback)
+/// ✅ 카카오계정 로그인 (웹 기반 fallback)
 Future<void> _loginWithKakaoAccountFallback(BuildContext context) async {
   try {
-    OAuthToken token = await UserApi.instance.loginWithKakaoAccount();
+    OAuthToken token = await UserApi.instance.loginWithKakaoAccount(); // <- redirectUri 제거
     _logger.info('카카오계정 로그인 성공: ${token.accessToken}');
 
     final userInfo = await _getUserInfo(accessToken: token.accessToken);
@@ -143,5 +154,9 @@ Future<void> _loginWithKakaoAccountFallback(BuildContext context) async {
     }
   } catch (error) {
     _logger.severe('❌ 카카오계정 로그인 실패: $error');
+    if (error.toString().contains('REDIRECT_URI_MISMATCH')) {
+      print("⚠️ 시뮬레이터에서는 redirectUri 설정 확인 필요");
+    }
   }
 }
+
