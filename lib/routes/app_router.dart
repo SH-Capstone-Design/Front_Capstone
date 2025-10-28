@@ -12,8 +12,6 @@ import 'package:connectbeat/screens/input_code_screen.dart';
 import 'package:connectbeat/screens/home_screen.dart';
 import 'package:connectbeat/screens/couple_date_screen.dart';
 import 'package:connectbeat/screens/setting_screen.dart';
-import 'package:connectbeat/screens/create_chat_screen.dart';
-import 'package:connectbeat/screens/invite_partner_screen.dart';
 import 'package:connectbeat/screens/couple_manage_screen.dart';
 import 'package:connectbeat/screens/myprofile_setting_screen.dart';
 import 'package:connectbeat/screens/splash_screen.dart';

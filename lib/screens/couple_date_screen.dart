@@ -1,9 +1,12 @@
+import 'package:connectbeat/services/auth_service.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/widgets/rounded_button.dart';
 import '../providers/couple_date_provider.dart';
+import '../services/date_websocket_service.dart';
+import '../main.dart';
 
 class CoupleDateScreen extends ConsumerStatefulWidget {
   const CoupleDateScreen({super.key});
@@ -16,7 +19,6 @@ class _CoupleDateScreenState extends ConsumerState<CoupleDateScreen> {
   late FixedExtentScrollController yearController;
   late FixedExtentScrollController monthController;
   late FixedExtentScrollController dayController;
-
   late List<int> years;
   final List<int> months = List.generate(12, (index) => index + 1);
   late List<int> days;
@@ -29,17 +31,16 @@ class _CoupleDateScreenState extends ConsumerState<CoupleDateScreen> {
   void initState() {
     super.initState();
     _initDate();
+    _connectWebSocket();
   }
 
   void _initDate() {
     final savedDate = ref.read(coupleDateProvider) ?? DateTime.now();
     final currentYear = DateTime.now().year;
-
     years = List.generate(currentYear - 1900 + 1, (index) => 1900 + index);
 
     selectedYearIndex = years.indexOf(savedDate.year);
     if (selectedYearIndex == -1) selectedYearIndex = years.length - 1;
-
     selectedMonthIndex = savedDate.month - 1;
 
     _updateDays();
@@ -82,6 +83,24 @@ class _CoupleDateScreenState extends ConsumerState<CoupleDateScreen> {
     });
   }
 
+  Future<void> _connectWebSocket() async {
+    final token = await AuthService.getToken();
+    final userId = await AuthService.getUserId();
+    if (token == null || userId == null) return;
+
+    await DateWebsocketService.connect(userId, token, onSubscribed: () {
+      print("✅ D-Day WebSocket 연결 완료");
+    });
+
+    DateWebsocketService.setOnCoupleDDayUpdated((event) {
+      if (messengerKey.currentState != null) {
+        messengerKey.currentState!.showSnackBar(
+          const SnackBar(content: Text('💖 커플 디데이가 업데이트되었습니다!')),
+        );
+      }
+    });
+  }
+
   Future<void> _saveDate() async {
     final selectedDate = DateTime(
       years[selectedYearIndex],
@@ -89,24 +108,25 @@ class _CoupleDateScreenState extends ConsumerState<CoupleDateScreen> {
       days[selectedDayIndex],
     );
 
-    await ref.read(coupleDateProvider.notifier).save(selectedDate);
+    try {
+      await ref.read(coupleDateProvider.notifier).saveToServer(selectedDate);
 
-    // ✅ 저장 완료 메시지 표시
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          '디데이가 설정되었습니다 💖',
-          style: TextStyle(fontFamily: 'GowunBatang'),
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('디데이가 설정되었습니다 💖'),
+          duration: Duration(seconds: 2),
+          backgroundColor: Colors.pinkAccent,
+          behavior: SnackBarBehavior.floating,
         ),
-        duration: Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: Colors.pinkAccent,
-      ),
-    );
+      );
 
-    Navigator.pop(context);
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('디데이 저장 실패: $e')),
+      );
+    }
   }
-
 
   Widget _buildPicker(List<int> items, FixedExtentScrollController controller,
       ValueChanged<int> onChanged, String suffix) {
@@ -153,12 +173,10 @@ class _CoupleDateScreenState extends ConsumerState<CoupleDateScreen> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final horizontalPadding = size.width * 0.06;
-
     final dDayText = ref.watch(coupleDateProvider.notifier).getDDayText();
 
     return Scaffold(
-      extendBodyBehindAppBar: true, // 배경 이미지가 AppBar 뒤로 가도록
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text(
           '디데이 설정',

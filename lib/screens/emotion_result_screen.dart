@@ -1,8 +1,9 @@
-import 'package:connectbeat/screens/chathistory_screen.dart';
+import 'package:connectbeat/services/couple_service.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/services/chat_report_service.dart';
+import 'package:connectbeat/screens/chathistory_screen.dart';
 
 class EmotionResultScreen extends StatefulWidget {
   final String chatSessionId;
@@ -64,10 +65,7 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
     setState(() => _loading = true);
 
     try {
-      // ✅ GET 방식 호출: feedback 제거
-      final report = await ChatReportService.generateReport(
-        widget.chatSessionId,
-      );
+      final report = await ChatReportService.generateReport(widget.chatSessionId);
 
       if (report == null) {
         setState(() {
@@ -80,7 +78,6 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
       final timeline = report['aggregatedTimeline'] ?? {};
       final points = (timeline['points'] ?? []) as List;
 
-      // 🔹 minute 기준 오름차순 정렬
       points.sort((a, b) {
         final minA = (a['minute'] ?? 0) as num;
         final minB = (b['minute'] ?? 0) as num;
@@ -102,7 +99,7 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
       setState(() {
         _report = report;
         if (_selectedEmotions.isEmpty && emotions.isNotEmpty) {
-          _selectedEmotions.add(emotions[0]); // 기본 선택: 기쁨
+          _selectedEmotions.add(emotions[0]); // 기본 선택
         }
       });
     } catch (e) {
@@ -132,17 +129,17 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator(color: Colors.black))
                 : _error != null
-                    ? Center(
-                        child: Text(
-                          _error!,
-                          style: const TextStyle(
-                            fontFamily: 'GowunBatang',
-                            fontSize: 16,
-                            color: Colors.black,
-                          ),
-                        ),
-                      )
-                    : _buildReportContent(screenHeight),
+                ? Center(
+              child: Text(
+                _error!,
+                style: const TextStyle(
+                  fontFamily: 'GowunBatang',
+                  fontSize: 16,
+                  color: Colors.black,
+                ),
+              ),
+            )
+                : _buildReportContent(screenHeight),
           ),
         ),
       ),
@@ -150,15 +147,11 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
   }
 
   Widget _buildReportContent(double screenHeight) {
-    final detailedEmotions =
-        List<Map<String, dynamic>>.from(_report?['detailedEmotions'] ?? []);
-
     // 🔹 maxX 계산
     double maxX = emotionSpots.values
         .expand((list) => list)
         .fold<double>(0, (prev, spot) => spot.x > prev ? spot.x : prev);
 
-    // 🔹 bottom interval 계산 (x축 라벨 5~6개 정도)
     double bottomInterval = (maxX / 5).ceilToDouble();
     bottomInterval = bottomInterval > 0 ? bottomInterval : 1;
 
@@ -177,7 +170,7 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
         ),
         const SizedBox(height: 8),
 
-        /// 🔹 감정 그래프
+        // 🔹 감정 그래프
         Container(
           height: screenHeight * 0.35,
           decoration: BoxDecoration(
@@ -198,28 +191,16 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
                     sideTitles: SideTitles(
                       showTitles: true,
                       interval: bottomInterval,
-                      getTitlesWidget: (value, meta) => Text(
-                        "${value.toInt()}분",
-                        style: const TextStyle(
-                          fontFamily: 'GowunBatang',
-                          color: Colors.black,
-                          fontSize: 10,
-                        ),
-                      ),
+                      getTitlesWidget: (value, meta) =>
+                          Text("${value.toInt()}분", style: const TextStyle(fontFamily: 'GowunBatang', color: Colors.black, fontSize: 10)),
                     ),
                   ),
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
                       interval: 0.2,
-                      getTitlesWidget: (value, meta) => Text(
-                        value.toStringAsFixed(1),
-                        style: const TextStyle(
-                          fontFamily: 'GowunBatang',
-                          color: Colors.black,
-                          fontSize: 10,
-                        ),
-                      ),
+                      getTitlesWidget: (value, meta) =>
+                          Text(value.toStringAsFixed(1), style: const TextStyle(fontFamily: 'GowunBatang', color: Colors.black, fontSize: 10)),
                     ),
                   ),
                   rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -249,7 +230,7 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
 
         const SizedBox(height: 10),
 
-        /// 🔹 감정 선택 버튼
+        // 🔹 감정 선택 버튼
         Container(
           height: 50,
           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -273,8 +254,7 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
                     margin: const EdgeInsets.symmetric(horizontal: 6),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: isSelected
                           ? colors[index % colors.length].withOpacity(0.3)
@@ -284,8 +264,7 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
                     child: Text(
                       emotion,
                       style: TextStyle(
-                        fontWeight:
-                            isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                         color: isSelected ? Colors.black : Colors.black87,
                         fontSize: 14,
                         fontFamily: 'GowunBatang',
@@ -300,7 +279,7 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
 
         const SizedBox(height: 10),
 
-        /// 🔹 피드백
+        // 🔹 피드백 + ChatReportListScreen 이동 버튼
         Expanded(
           child: Container(
             padding: const EdgeInsets.all(16),
@@ -335,26 +314,25 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
                           ),
                         ),
                         const SizedBox(height: 20),
-                        // ✅ ChatReportListScreen 이동 버튼
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
                             onPressed: () {
-                              Navigator.pushNamed(
+                              Navigator.pushNamedAndRemoveUntil(
                                 context,
-                                '/reportlist',
-                                arguments: {'coupleId': _report?['coupleId'] ?? 0},
+                                '/home', // 메인 화면 라우트 이름
+                                    (route) => false, // 기존 스택 모두 제거
                               );
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blueAccent,
+                              backgroundColor: const Color(0xFFFFEEFF),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
                             child: const Text(
-                              "대화 리포트 목록으로 가기",
+                              "메인으로 이동",
                               style: TextStyle(
                                 fontFamily: 'GowunBatang',
                                 fontSize: 16,
