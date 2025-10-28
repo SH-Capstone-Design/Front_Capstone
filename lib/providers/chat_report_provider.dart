@@ -5,3 +5,7 @@ import '../services/chat_report_service.dart';
 final chatReportListProvider = FutureProvider.family<List<Map<String, dynamic>>, int>((ref, coupleId) async {
   return await ChatReportService.fetchReportList(coupleId);
 });
+
+final chatReportProvider = FutureProvider.family<Map<String, dynamic>?, String>((ref, chatSessionId) async {
+  return await ChatReportService.generateReport(chatSessionId);
+});

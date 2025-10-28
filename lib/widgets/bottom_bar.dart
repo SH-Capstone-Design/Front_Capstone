@@ -89,7 +89,7 @@ class _BottomBarState extends State<BottomBar> with SingleTickerProviderStateMix
                   width: indicatorWidth,
                   height: indicatorHeight,
                   decoration: BoxDecoration(
-                    color: Colors.pink.withOpacity(0.2),
+                    color: const Color(0xFFFBEEFF), // 33 = 20% 투명도
                     borderRadius: BorderRadius.circular(indicatorHeight / 2), // 타원 끝 둥글게
                   ),
                 ),
@@ -112,7 +112,8 @@ class _BottomBarState extends State<BottomBar> with SingleTickerProviderStateMix
                   child: Icon(
                     items[index],
                     size: iconSize,
-                    color: selected ? Colors.pink : Colors.grey,
+                    color: selected ? const Color(0xFFFDAAFF) : const Color(
+                        0xFFC1C1C1),
                   ),
                 ),
               );

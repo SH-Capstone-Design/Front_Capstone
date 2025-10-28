@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../services/auth_service.dart';
+import '../services/s3_service.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:mime/mime.dart';
@@ -38,6 +39,7 @@ class UserNotifier extends StateNotifier<AsyncValue<Map<String, dynamic>>> {
 
   /// 🔹 닉네임 수정
   Future<void> updateNickname(String nickname) async {
+    final current = state.value ?? {};
     try {
       final token = await AuthService.getToken();
       if (token == null) throw Exception('JWT 토큰 없음');
@@ -52,9 +54,7 @@ class UserNotifier extends StateNotifier<AsyncValue<Map<String, dynamic>>> {
       );
 
       if (response.statusCode == 200) {
-        final current = state.value ?? {};
-        final updated = {...current, 'nickname': nickname};
-        state = AsyncValue.data(updated);
+        state = AsyncValue.data({...current, 'nickname': nickname});
       } else {
         throw Exception('닉네임 수정 실패 (${response.statusCode})');
       }
@@ -64,40 +64,26 @@ class UserNotifier extends StateNotifier<AsyncValue<Map<String, dynamic>>> {
     }
   }
 
-  /// 🔹 프로필 이미지 업로드
+  /// 🔹 프로필 이미지 업로드 (File)
   Future<String?> uploadProfileImage(File imageFile) async {
     try {
-      final token = await AuthService.getToken();
-      if (token == null) throw Exception('JWT 토큰 없음');
+      final newUrl = await uploadProfileImageToServer(imageFile);
+      final current = state.value ?? {};
+      state = AsyncValue.data({...current, 'profileImage': newUrl});
+      return newUrl;
+    } catch (e, st) {
+      state = AsyncValue.error(e.toString(), st);
+      rethrow;
+    }
+  }
 
-      final uri = Uri.parse('${dotenv.env['BASE_URL']}/users/me/profile-image');
-      final request = http.MultipartRequest('POST', uri);
-      request.headers['Authorization'] = 'Bearer $token';
-
-      final mimeType = lookupMimeType(imageFile.path) ?? 'image/jpeg';
-      final parts = mimeType.split('/');
-
-      request.files.add(await http.MultipartFile.fromPath(
-        'image',
-        imageFile.path,
-        contentType: MediaType(parts[0], parts[1]),
-      ));
-
-      final response = await request.send();
-      final responseBody = await response.stream.bytesToString();
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(utf8.decode(responseBody.codeUnits));
-        final newUrl = data['profileImageUrl'];
-
-        final current = state.value ?? {};
-        final updated = {...current, 'profileImage': newUrl};
-        state = AsyncValue.data(updated);
-
-        return newUrl;
-      } else {
-        throw Exception('이미지 업로드 실패 (${response.statusCode})');
-      }
+  /// 🔹 프로필 이미지 업로드 (URL)
+  Future<String?> uploadProfileImageFromUrl(String imageUrl) async {
+    try {
+      final newUrl = await uploadProfileImageFromUrl(imageUrl);
+      final current = state.value ?? {};
+      state = AsyncValue.data({...current, 'profileImage': newUrl});
+      return newUrl;
     } catch (e, st) {
       state = AsyncValue.error(e.toString(), st);
       rethrow;
@@ -108,14 +94,13 @@ class UserNotifier extends StateNotifier<AsyncValue<Map<String, dynamic>>> {
   Future<File?> pickImageFromGallery() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      return File(picked.path);
-    }
+    if (picked != null) return File(picked.path);
     return null;
   }
 }
 
 final userProvider =
 StateNotifierProvider<UserNotifier, AsyncValue<Map<String, dynamic>>>(
-      (ref) => UserNotifier(),
+        (ref) => UserNotifier(
+        )
 );

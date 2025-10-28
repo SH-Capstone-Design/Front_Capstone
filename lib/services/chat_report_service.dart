@@ -83,4 +83,41 @@ class ChatReportService {
       return [];
     }
   }
+
+  /// 🔹 3. reportId 기준 리포트 조회 (GET)
+  static Future<Map<String, dynamic>?> generateReportById(String reportId) async {
+    try {
+      final token = await AuthService.getToken();
+      if (token == null || token.isEmpty) {
+        throw Exception("🚫 로그인 토큰이 없습니다. 인증 실패");
+      }
+
+      final url = Uri.parse('$baseUrl/chat-report/$reportId'); // 🔹 reportId 기준
+      debugPrint("📥 [GET] $url");
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      debugPrint("🧩 응답 코드: ${response.statusCode}");
+      debugPrint("🧩 응답 본문: ${response.body}");
+
+      if (response.statusCode == 200) {
+        final body = utf8.decode(response.bodyBytes);
+        return jsonDecode(body) as Map<String, dynamic>;
+      } else if (response.statusCode == 404) {
+        debugPrint("⚠️ 리포트 없음 (404)");
+        return null;
+      } else {
+        throw Exception('리포트 조회 실패 (${response.statusCode})');
+      }
+    } catch (e, st) {
+      debugPrint("🚨 fetchReportById() 오류: $e\n$st");
+      return null;
+    }
+  }
 }

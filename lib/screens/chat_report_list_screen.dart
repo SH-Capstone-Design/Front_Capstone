@@ -5,32 +5,41 @@ import 'chat_report_detail_screen.dart';
 import '../core/constants.dart';
 
 class ChatReportListScreen extends ConsumerWidget {
-  final int coupleId;
+  final int? coupleId;
+
   const ChatReportListScreen({super.key, required this.coupleId});
+
+  /// 🔹 createdAt 기반 제목 포맷
+  String formatReportTitle(String? createdAt) {
+    if (createdAt == null || createdAt.isEmpty) return "감정 리포트";
+
+    final dt = DateTime.tryParse(createdAt);
+    if (dt == null) return "감정 리포트";
+
+    return "${dt.year}년 ${dt.month}월 ${dt.day}일의 감정 리포트";
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final reportListAsync = ref.watch(chatReportListProvider(coupleId));
-
     const titleFontSize = 22.0;
     const infoFontSize = 18.0;
 
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        title: const Text(
-          '대화 리포트 목록',
+    if (coupleId == null) {
+      return const Center(
+        child: Text(
+          '커플 정보가 없습니다.',
           style: TextStyle(
             fontFamily: 'GowunBatang',
-            fontSize: titleFontSize,
-            color: Colors.black,
+            fontSize: infoFontSize,
+            color: Colors.black54,
           ),
         ),
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
+      );
+    }
+
+    final reportListAsync = ref.watch(chatReportListProvider(coupleId!));
+
+    return Scaffold(
       body: Container(
         decoration: BoxDecoration(
           image: DecorationImage(
@@ -49,77 +58,82 @@ class ChatReportListScreen extends ConsumerWidget {
                       '리포트가 없습니다.',
                       style: TextStyle(
                         fontFamily: 'GowunBatang',
-                        fontSize: infoFontSize,
+                        fontSize: 18,
                         color: Colors.black54,
                       ),
+                      textAlign: TextAlign.center,
                     ),
                   );
                 }
 
-                return ListView.builder(
-                  itemCount: reports.length,
-                  itemBuilder: (context, index) {
-                    final report = reports[index];
-                    final chatSessionId = report['chatSessionId'] ?? 'N/A'; // 수정
-                    final summary = report['shortFeedbackSummary'] ?? '';
-                    final createdAt = report['createdAt']?.substring(0, 10) ?? '';
-
-                    return Card(
-                      color: Colors.white70,
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.center, // 중앙 정렬
+                  children: [
+                    const Text(
+                      '대화 리포트 목록',
+                      textAlign: TextAlign.center, // 텍스트 중앙 정렬
+                      style: TextStyle(
+                        fontFamily: 'GowunBatang',
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
                       ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        title: Text(
-                          '세션 $chatSessionId',
-                          style: const TextStyle(
-                            fontFamily: 'GowunBatang',
-                            fontSize: infoFontSize,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        subtitle: Text(
-                          summary,
-                          style: const TextStyle(
-                            fontFamily: 'GowunBatang',
-                            fontSize: infoFontSize - 2,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        trailing: Text(
-                          createdAt,
-                          style: const TextStyle(
-                            fontFamily: 'GowunBatang',
-                            fontSize: infoFontSize - 4,
-                            color: Colors.black54,
-                          ),
-                        ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ChatReportDetailScreen(
-                                chatSessionId: chatSessionId, // 수정
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: reports.length,
+                        itemBuilder: (context, index) {
+                          final report = reports[index];
+                          final reportId = report['reportId'] ?? '';
+                          final summary = report['shortFeedbackSummary'] ?? '';
+                          final createdAt = report['createdAt'] ?? '';
+
+                          return Card(
+                            color: Colors.white,
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            child: ListTile(
+                              title: Text(
+                                formatReportTitle(createdAt),
+                                style: const TextStyle(
+                                    fontFamily: 'GowunBatang',
+                                    fontWeight: FontWeight.bold),
                               ),
+                              subtitle: summary.isNotEmpty
+                                  ? Text(
+                                summary,
+                                style: const TextStyle(
+                                    fontFamily: 'GowunBatang'),
+                              )
+                                  : null,
+                              onTap: () {
+                                if (reportId.isNotEmpty) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          ChatReportDetailScreen(reportId: reportId),
+                                    ),
+                                  );
+                                }
+                              },
                             ),
                           );
                         },
                       ),
-                    );
-                  },
+                    ),
+                  ],
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, st) => Center(
+              loading: () => const Center(child: CircularProgressIndicator(color: Colors.black)),
+              error: (err, _) => Center(
                 child: Text(
                   '에러: $err',
                   style: const TextStyle(
-                    fontFamily: 'GowunBatang',
-                    fontSize: infoFontSize,
-                    color: Colors.black,
-                  ),
+                      fontFamily: 'GowunBatang', color: Colors.red),
+                  textAlign: TextAlign.center,
                 ),
               ),
             ),

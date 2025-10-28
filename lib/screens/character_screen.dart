@@ -12,13 +12,118 @@ class CharacterScreen extends StatefulWidget {
   State<CharacterScreen> createState() => _CharacterScreenState();
 }
 
+/// 🔹 자동 슬라이드 배너 위젯
+class BannerSlider extends StatefulWidget {
+  final List<String> imagePaths;
+  const BannerSlider({super.key, required this.imagePaths});
+
+  @override
+  State<BannerSlider> createState() => _BannerSliderState();
+}
+
+class _BannerSliderState extends State<BannerSlider> {
+  final PageController _pageController = PageController(viewportFraction: 0.9);
+  int _currentPage = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted) return;
+      _currentPage = (_currentPage + 1) % widget.imagePaths.length;
+      _pageController.animateToPage(
+        _currentPage,
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeInOut,
+      );
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    return SizedBox(
+      height: screenHeight * 0.23, // 화면 비율 기반 높이
+      child: Stack(
+        children: [
+          PageView.builder(
+            controller: _pageController,
+            itemCount: widget.imagePaths.length,
+            onPageChanged: (index) => setState(() => _currentPage = index),
+            itemBuilder: (context, index) {
+              bool isActive = index == _currentPage;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: EdgeInsets.symmetric(
+                  horizontal: isActive ? 8 : 12,
+                  vertical: isActive ? 4 : 12,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(isActive ? 0.3 : 0.15),
+                      blurRadius: isActive ? 12 : 6,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.asset(
+                    widget.imagePaths[index],
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                  ),
+                ),
+              );
+            },
+          ),
+          Positioned(
+            bottom: 8,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(widget.imagePaths.length, (index) {
+                bool isActive = index == _currentPage;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  width: isActive ? 10 : 8,
+                  height: isActive ? 10 : 8,
+                  decoration: BoxDecoration(
+                    color: isActive ? Colors.black : Colors.black.withOpacity(0.5),
+                    shape: BoxShape.circle,
+                  ),
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 🔹 캐릭터 상점 메인 화면
 class _CharacterScreenState extends State<CharacterScreen> {
   String selectedCategory = '옷';
   final List<String> categories = ['옷', '배경'];
 
-  // 👋 캐릭터 애니메이션
   Timer? _handTimer;
   int _handIndex = 0;
+
   final List<String> _handImages = [
     'assets/images/ConnectBeatCharacter.png',
     'assets/images/ConnectBeatCharacter3.png',
@@ -29,11 +134,9 @@ class _CharacterScreenState extends State<CharacterScreen> {
     'assets/images/ConnectBeatCharacter2.png',
   ];
 
-  // 선택 상태
   String? selectedItemName;
   String? selectedItemImage;
 
-  // 카테고리별 아이템
   final Map<String, List<Map<String, dynamic>>> categoryItems = {
     '옷': [
       {'name': '흰 잠옷', 'image': 'assets/images/clothes/cloth_1.png', 'price': 30},
@@ -66,98 +169,70 @@ class _CharacterScreenState extends State<CharacterScreen> {
   void initState() {
     super.initState();
     _handIndex = 0;
-
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-
-      // 캐릭터 애니메이션 이미지 미리 로딩
       for (var img in _handImages) {
         await precacheImage(AssetImage(img), context);
       }
-
-      // 아이템 이미지 미리 로딩
-      for (var items in categoryItems.values) {
-        for (var item in items) {
-          await precacheImage(AssetImage(item['image']), context);
-        }
-      }
-
-      // 손 흔드는 애니메이션 시작
       _handTimer = Timer.periodic(const Duration(milliseconds: 450), (_) {
         if (!mounted) return;
-        setState(() {
-          _handIndex = (_handIndex + 1) % _handImages.length;
-        });
+        setState(() => _handIndex = (_handIndex + 1) % _handImages.length);
       });
     });
   }
 
   @override
   void dispose() {
-    _handTimer?.cancel(); // nullable로 안전하게
+    _handTimer?.cancel();
     super.dispose();
   }
 
-  // 상품 선택/미리보기/구매 다이얼로그
   Future<void> _showItemDialog(String itemName, String imagePath) async {
     final items = categoryItems[selectedCategory]!;
     final selectedIndex = items.indexWhere((item) => item['name'] == itemName);
 
-    bool? purchaseConfirmed = await showDialog<bool>(
+    bool? confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Dialog(
+      builder: (_) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: Colors.white,
         child: Container(
           padding: const EdgeInsets.all(20),
-          width: 300,
+          width: 280,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('상품 선택', style: TextStyle(fontSize: 22, fontFamily: 'GowunBatang', fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              Text('$itemName을(를) 선택했습니다.', textAlign: TextAlign.center),
-              const SizedBox(height: 24),
+              const Text('상품 선택', style: TextStyle(fontSize: 20, fontFamily: 'GowunBatang', fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              Text('$itemName을(를) 선택했습니다.'),
+              const SizedBox(height: 20),
               Row(
                 children: [
-                  Expanded(
-                    child: RoundedButton(text: '취소', onPressed: () => Navigator.pop(context, false)),
-                  ),
-                  const SizedBox(width: 8),
+                  Expanded(child: RoundedButton(text: '취소', onPressed: () => Navigator.pop(context, false))),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: RoundedButton(
                       text: '미리보기',
                       onPressed: () async {
                         Navigator.pop(context);
                         if (selectedCategory == '옷') {
-                          // 캐릭터 미리보기
                           String folder = 'assets/images/characters/ch_${selectedIndex + 1}';
                           await Navigator.push(
                             context,
                             MaterialPageRoute(builder: (_) => PreviewScreen(itemName: itemName, characterFolder: folder)),
                           );
-                        } else if (selectedCategory == '배경') {
-                          // 배경 미리보기
+                        } else {
                           await Navigator.push(
                             context,
-                            MaterialPageRoute(
-                              builder: (_) => BackgroundPreviewScreen(
-                                backgroundName: itemName,
-                                backgroundImagePath: imagePath,
-                              ),
-                            ),
+                            MaterialPageRoute(builder: (_) => BackgroundPreviewScreen(backgroundName: itemName, backgroundImagePath: imagePath)),
                           );
                         }
-                        // 미리보기 종료 후 다이얼로그 재오픈
                         _showItemDialog(itemName, imagePath);
                       },
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: RoundedButton(text: '구매', onPressed: () => Navigator.pop(context, true)),
-                  ),
+                  const SizedBox(width: 6),
+                  Expanded(child: RoundedButton(text: '구매', onPressed: () => Navigator.pop(context, true))),
                 ],
               ),
             ],
@@ -166,8 +241,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
       ),
     );
 
-    // 구매 완료 처리
-    if (purchaseConfirmed == true) {
+    if (confirmed == true) {
       setState(() {
         selectedItemName = itemName;
         selectedItemImage = imagePath;
@@ -178,126 +252,178 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screen = MediaQuery.of(context).size;
     final items = categoryItems[selectedCategory]!;
 
-    return Stack(
-      children: [
-        // 배경
-        SizedBox.expand(child: Image.asset(AppConstants.backgroundPath, fit: BoxFit.cover)),
-        SafeArea(
-          child: Column(
-            children: [
-              const SizedBox(height: 20),
-              // 코인 표시
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Image.asset('assets/images/ConnectBeat_coin.png', width: 30, height: 30),
-                    const SizedBox(width: 8),
-                    const Text('10 개', style: TextStyle(fontFamily: 'GowunBatang', fontSize: 18, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text('캐릭터 꾸미기', style: TextStyle(fontFamily: 'GowunBatang', fontSize: 28, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 20),
-              // 캐릭터 애니메이션
-              Expanded(
-                flex: 5,
-                child: Center(
-                  child: Stack(
-                    children: _handImages.asMap().entries.map((entry) {
-                      int idx = entry.key;
-                      String img = entry.value;
-                      return Opacity(
-                        opacity: idx == _handIndex ? 1.0 : 0.0,
-                        child: Image.asset(img, fit: BoxFit.contain),
+    return Scaffold(
+      body: Stack(
+        children: [
+          SizedBox.expand(child: Image.asset(AppConstants.backgroundPath, fit: BoxFit.cover)),
+          SafeArea(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: screen.width * 0.04),
+              child: Column(
+                children: [
+                  SizedBox(height: screen.height * 0.02),
+                  Row(
+                    children: [
+                      Image.asset('assets/images/ConnectBeat_coin.png', width: screen.width * 0.08),
+                      SizedBox(width: screen.width * 0.02),
+                      Text('10코인',
+                          style: TextStyle(
+                            fontFamily: 'GowunBatang',
+                            fontSize: screen.width * 0.045,
+                            fontWeight: FontWeight.bold,
+                          )),
+                      const Spacer(),
+                      Text('캐릭터 상점',
+                          style: TextStyle(
+                            fontFamily: 'GowunBatang',
+                            fontSize: screen.width * 0.06,
+                            fontWeight: FontWeight.bold,
+                          )),
+                      const Spacer(flex: 2),
+                    ],
+                  ),
+                  SizedBox(height: screen.height * 0.02),
+
+                  /// 🔹 배너
+                  BannerSlider(
+                    imagePaths: [
+                      'assets/images/ConnectBeat_Baenur.png',
+                      'assets/images/ConnectBeat_Baenur1.png',
+                    ],
+                  ),
+
+                  SizedBox(height: screen.height * 0.025),
+
+                  /// 🔹 캐릭터 애니메이션
+                  Expanded(
+                    flex: 6,
+                    child: Center(
+                      child: Stack(
+                        children: _handImages.asMap().entries.map((entry) {
+                          return Opacity(
+                            opacity: entry.key == _handIndex ? 1.0 : 0.0,
+                            child: Image.asset(
+                              entry.value,
+                              height: screen.height * 0.7,
+                              fit: BoxFit.contain,
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+
+                  /// 🔹 카테고리 버튼
+                  Row(
+                    children: categories.map((category) {
+                      return Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: screen.width * 0.01),
+                          child: RoundedButton(
+                            text: category,
+                            onPressed: () => setState(() => selectedCategory = category),
+                          ),
+                        ),
                       );
                     }).toList(),
                   ),
-                ),
-              ),
-              // 카테고리 버튼
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: categories.map((category) {
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: RoundedButton(
-                          text: category,
-                          onPressed: () => setState(() => selectedCategory = category),
+
+                  SizedBox(height: screen.height * 0.015),
+
+                  /// 🔹 아이템 그리드
+                  Expanded(
+                    flex: 4,
+                    child: Container(
+                      color: Colors.white.withOpacity(0.2),
+                      padding: EdgeInsets.all(screen.width * 0.02),
+                      child: GridView.builder(
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                          childAspectRatio: 1,
                         ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-              const SizedBox(height: 8),
-              // 아이템 그리드
-              Expanded(
-                flex: 4,
-                child: Container(
-                  color: Colors.white.withOpacity(0.2),
-                  padding: const EdgeInsets.all(8),
-                  child: GridView.builder(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      crossAxisSpacing: 8,
-                      mainAxisSpacing: 8,
-                      childAspectRatio: 1,
-                    ),
-                    itemCount: items.length,
-                    itemBuilder: (context, index) {
-                      final item = items[index];
-                      return GestureDetector(
-                        onTap: () => _showItemDialog(item['name'], item['image']),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 150),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            color: Colors.white.withOpacity(0.2),
-                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 6, offset: const Offset(2, 2))],
-                            border: Border.all(color: Colors.white.withOpacity(0.4), width: 1.5),
-                          ),
-                          child: Stack(
-                            children: [
-                              ClipRRect(
+                        itemCount: items.length,
+                        itemBuilder: (context, index) {
+                          final item = items[index];
+                          return GestureDetector(
+                            onTap: () => _showItemDialog(item['name'], item['image']),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(12),
-                                child: Image.asset(item['image'], fit: BoxFit.cover, width: double.infinity, height: double.infinity),
-                              ),
-                              Container(decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Colors.black.withOpacity(0.15))),
-                              Positioned(
-                                bottom: 6,
-                                left: 6,
-                                right: 6,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
-                                  decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), borderRadius: BorderRadius.circular(8)),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Image.asset('assets/images/ConnectBeat_coin.png', width: 16, height: 16),
-                                      const SizedBox(width: 4),
-                                      Text('${item['price']} 코인', style: const TextStyle(fontFamily: 'GowunBatang', color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                                    ],
+                                color: Colors.white.withOpacity(0.2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 6,
+                                    offset: const Offset(2, 2),
                                   ),
-                                ),
+                                ],
+                                border: Border.all(color: Colors.white.withOpacity(0.4), width: 1.5),
                               ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                              child: Stack(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.asset(
+                                      item['image'],
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                      height: double.infinity,
+                                    ),
+                                  ),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      color: Colors.black.withOpacity(0.15),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    bottom: 6,
+                                    left: 6,
+                                    right: 6,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.5),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Image.asset('assets/images/ConnectBeat_coin.png', width: screen.width * 0.04),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            '${item['price']} 코인',
+                                            style: TextStyle(
+                                              fontFamily: 'GowunBatang',
+                                              color: Colors.white,
+                                              fontSize: screen.width * 0.03,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

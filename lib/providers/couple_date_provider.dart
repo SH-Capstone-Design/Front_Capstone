@@ -1,5 +1,9 @@
+import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'package:connectbeat/services/date_websocket_service.dart';
+import 'package:connectbeat/services/auth_service.dart';
 
 final coupleDateProvider = StateNotifierProvider<CoupleDateNotifier, DateTime?>(
       (ref) => CoupleDateNotifier(),
@@ -7,28 +11,64 @@ final coupleDateProvider = StateNotifierProvider<CoupleDateNotifier, DateTime?>(
 
 class CoupleDateNotifier extends StateNotifier<DateTime?> {
   CoupleDateNotifier() : super(null) {
-    _load();
+    // 💌 웹소켓 이벤트 수신 시 D-Day 갱신
+    DateWebsocketService.setOnCoupleDDayUpdated((event) {
+      final dateStr = event['payload']?['anniversaryDate'];
+      if (dateStr != null) {
+        final parsedDate = DateTime.tryParse(dateStr);
+        if (parsedDate != null) {
+          state = parsedDate;
+          print("💖 실시간 D-Day 업데이트: $dateStr");
+        }
+      }
+    });
   }
 
-  // 저장된 날짜 불러오기
-  Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final dateStr = prefs.getString('coupleDate');
-    if (dateStr != null) state = DateTime.tryParse(dateStr);
+  /// 🗓 서버에서 받은 D-Day 초기화
+  void setDate(DateTime date) {
+    state = date;
+    print("💌 D-Day 초기화: ${date.toIso8601String()}");
   }
 
-  // 날짜 저장 및 상태 갱신
-  Future<void> save(DateTime date) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('coupleDate', date.toIso8601String());
-    state = date; // 상태 갱신 → 홈 화면 자동 rebuild
+  /// 🌐 D-Day 서버에 저장
+  Future<void> saveToServer(DateTime date) async {
+    final token = await AuthService.getToken();
+    if (token == null) throw Exception('JWT 토큰이 없습니다.');
+
+    final url = Uri.parse('${dotenv.env['BASE_URL']}/couples/dday');
+    final body = jsonEncode({
+      'anniversaryDate': date.toIso8601String().split('T')[0], // YYYY-MM-DD
+    });
+
+    try {
+      final response = await http.put(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: body,
+      );
+
+      if (response.statusCode == 200) {
+        state = date;
+        print("✅ D-Day 서버 저장 성공: ${date.toIso8601String()}");
+      } else {
+        print("❌ D-Day 저장 실패: ${response.body}");
+        throw Exception('D-Day 저장 실패: ${response.body}');
+      }
+    } catch (e) {
+      print("❌ D-Day 서버 요청 실패: $e");
+      throw Exception('D-Day 서버 요청 실패: $e');
+    }
   }
 
-  // D-Day 텍스트 계산
+  /// 💕 D-Day 텍스트 계산
   String getDDayText() {
     if (state == null) return '사귄 날짜를 설정해주세요';
     final now = DateTime.now();
-    final diff = now.difference(state!).inDays + 1; // 오늘 포함 1일부터 시작
-    return '우리가 만난지 $diff일 🩷';
+    final diffDays = now.difference(state!).inDays + 1;
+    if (diffDays <= 0) return '사귄 날짜를 올바르게 설정해주세요';
+    return '우리가 만난지 $diffDays일 🩷';
   }
 }

@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/user_provider.dart';
 import '../widgets/rounded_button.dart';
 import '../core/constants.dart';
-import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
 
 class MyProfileSettingScreen extends ConsumerStatefulWidget {
   const MyProfileSettingScreen({super.key});
@@ -20,6 +19,7 @@ class _MyProfileSettingScreenState
   late TextEditingController _nicknameController;
   File? _pickedImage;
   String? _latestProfileUrl;
+  bool _isUploading = false;
 
   @override
   void initState() {
@@ -27,22 +27,9 @@ class _MyProfileSettingScreenState
     final user = ref.read(userProvider).value;
     _nicknameController = TextEditingController(text: user?['nickname'] ?? '');
     _latestProfileUrl = user?['profileImage'];
-    _fetchLatestKakaoProfile();
   }
 
-  Future<void> _fetchLatestKakaoProfile() async {
-    try {
-      if (await AuthApi.instance.hasToken()) {
-        final kakaoUser = await UserApi.instance.me();
-        setState(() {
-          _latestProfileUrl =
-              kakaoUser.kakaoAccount?.profile?.profileImageUrl ??
-                  _latestProfileUrl;
-        });
-      }
-    } catch (_) {}
-  }
-
+  /// 갤러리에서 이미지 선택
   Future<void> _pickImage() async {
     final file = await ref.read(userProvider.notifier).pickImageFromGallery();
     if (file != null) {
@@ -50,6 +37,7 @@ class _MyProfileSettingScreenState
     }
   }
 
+  /// 저장 버튼 눌렀을 때
   Future<void> _onSavePressed() async {
     final nickname = _nicknameController.text.trim();
     if (nickname.isEmpty) {
@@ -59,8 +47,10 @@ class _MyProfileSettingScreenState
       return;
     }
 
+    setState(() => _isUploading = true);
+
     try {
-      // 1️⃣ 이미지 업로드 (선택된 경우)
+      // 1️⃣ 이미지 업로드
       if (_pickedImage != null) {
         final imageUrl =
         await ref.read(userProvider.notifier).uploadProfileImage(_pickedImage!);
@@ -80,8 +70,11 @@ class _MyProfileSettingScreenState
         Navigator.pop(context, true);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('업데이트 실패: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('업데이트 실패: $e')),
+      );
+    } finally {
+      setState(() => _isUploading = false);
     }
   }
 
@@ -104,7 +97,7 @@ class _MyProfileSettingScreenState
     }
 
     return Scaffold(
-      extendBodyBehindAppBar: true, // AppBar 뒤로 배경 확장
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text(
           '내 프로필 설정',
@@ -121,32 +114,37 @@ class _MyProfileSettingScreenState
       ),
       body: Stack(
         children: [
-          // 배경 이미지
           SizedBox.expand(
             child: Image.asset(
               AppConstants.backgroundPath,
               fit: BoxFit.cover,
             ),
           ),
-          // SafeArea + 화면 내용
           SafeArea(
             child: SingleChildScrollView(
               padding: EdgeInsets.symmetric(horizontal: size.width * 0.06),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 100), // AppBar 아래 여백 확보
+                  const SizedBox(height: 100),
                   Center(
                     child: GestureDetector(
                       onTap: _pickImage,
-                      child: CircleAvatar(
-                        radius: 60,
-                        backgroundColor: Colors.grey[200],
-                        backgroundImage: avatar,
-                        child: avatar == null
-                            ? const Icon(Icons.person,
-                            size: 60, color: Colors.grey)
-                            : null,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CircleAvatar(
+                            radius: 60,
+                            backgroundColor: Colors.grey[200],
+                            backgroundImage: avatar,
+                            child: avatar == null
+                                ? const Icon(Icons.person,
+                                size: 60, color: Colors.grey)
+                                : null,
+                          ),
+                          if (_isUploading)
+                            const CircularProgressIndicator(),
+                        ],
                       ),
                     ),
                   ),
@@ -179,7 +177,7 @@ class _MyProfileSettingScreenState
                   const SizedBox(height: 40),
                   RoundedButton(
                     text: '저장하기',
-                    onPressed: _onSavePressed,
+                    onPressed: _isUploading ? null : _onSavePressed,
                   ),
                   const SizedBox(height: 20),
                 ],
