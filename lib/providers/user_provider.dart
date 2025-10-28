@@ -5,10 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../services/auth_service.dart';
-import '../services/s3_service.dart';
+import 'package:connectbeat/services/s3_service.dart' as s3;
 import 'package:image_picker/image_picker.dart';
-import 'package:http_parser/http_parser.dart';
-import 'package:mime/mime.dart';
 
 class UserNotifier extends StateNotifier<AsyncValue<Map<String, dynamic>>> {
   UserNotifier() : super(const AsyncValue.loading()) {
@@ -67,7 +65,7 @@ class UserNotifier extends StateNotifier<AsyncValue<Map<String, dynamic>>> {
   /// 🔹 프로필 이미지 업로드 (File)
   Future<String?> uploadProfileImage(File imageFile) async {
     try {
-      final newUrl = await uploadProfileImageToServer(imageFile);
+      final newUrl = await s3.uploadProfileImageToServer(imageFile);
       final current = state.value ?? {};
       state = AsyncValue.data({...current, 'profileImage': newUrl});
       return newUrl;
@@ -80,7 +78,8 @@ class UserNotifier extends StateNotifier<AsyncValue<Map<String, dynamic>>> {
   /// 🔹 프로필 이미지 업로드 (URL)
   Future<String?> uploadProfileImageFromUrl(String imageUrl) async {
     try {
-      final newUrl = await uploadProfileImageFromUrl(imageUrl);
+      // s3_service의 함수를 사용하여 URL 이미지 업로드
+      final newUrl = await s3.uploadProfileImageFromUrl(imageUrl);
       final current = state.value ?? {};
       state = AsyncValue.data({...current, 'profileImage': newUrl});
       return newUrl;
@@ -99,8 +98,7 @@ class UserNotifier extends StateNotifier<AsyncValue<Map<String, dynamic>>> {
   }
 }
 
+/// 🔹 UserProvider 정의
 final userProvider =
 StateNotifierProvider<UserNotifier, AsyncValue<Map<String, dynamic>>>(
-        (ref) => UserNotifier(
-        )
-);
+        (ref) => UserNotifier());
