@@ -47,13 +47,25 @@
             </intent-filter>
         </activity>
 
-
         <!-- Flutter KakaoTalk 로그인 Activity -->
         <activity
             android:name="com.kakao.sdk.flutter.TalkAuthCodeActivity"
             android:exported="true"
             android:launchMode="singleTask"
             tools:replace="android:exported"/>
+
+        <!-- 브라우저 로그인(Custom Tabs) 처리 Activity 추가 -->
+        <activity
+            android:name="com.kakao.sdk.flutter.AuthCodeCustomTabsActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="kakao10c223fbdb14031177450ceab1569621"/>
+            </intent-filter>
+        </activity>
 
         <!-- Flutter embedding -->
         <meta-data
