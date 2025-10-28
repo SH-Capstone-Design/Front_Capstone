@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:connectbeat/services/chat_report_service.dart';
-import 'package:connectbeat/services/couple_service.dart';
 import 'package:connectbeat/core/constants.dart';
 import 'package:fl_chart/fl_chart.dart';
 
@@ -28,26 +27,26 @@ class _ChatReportDetailScreenState extends State<ChatReportDetailScreen> {
     "Neutral": "중립",
   };
 
-  final List<String> emotions = [
-    "기쁨",
-    "설렘",
-    "슬픔",
-    "실망",
-    "후회",
-    "짜증",
-    "불안",
-    "중립",
+  final List<String> colorsEmotions = [
+    "Joy",
+    "Love",
+    "Sadness",
+    "Disappointment",
+    "Regret",
+    "Anger",
+    "Anxiety",
+    "Neutral"
   ];
 
   final List<Color> colors = [
-    const Color(0xFFFFFC2A),
-    const Color(0xFFA6FF76),
-    const Color(0xFF1F3580),
-    const Color(0xFF98FFF0),
-    const Color(0xFFFF6C6C),
-    const Color(0xFFFFA665),
-    const Color(0xFFB56EFF),
-    const Color(0xFFAAAAAA),
+    const Color(0xFFFFFC2A), // Joy
+    const Color(0xFFA6FF76), // Love
+    const Color(0xFF1F3580), // Sadness
+    const Color(0xFF98FFF0), // Disappointment
+    const Color(0xFFFF6C6C), // Regret
+    const Color(0xFFFFA665), // Anger
+    const Color(0xFFB56EFF), // Anxiety
+    const Color(0xFFAAAAAA), // Neutral
   ];
 
   Set<String> _selectedEmotions = {};
@@ -61,52 +60,173 @@ class _ChatReportDetailScreenState extends State<ChatReportDetailScreen> {
 
   Future<void> _fetchReport() async {
     setState(() => _loading = true);
-
     try {
       final report = await ChatReportService.generateReportById(widget.reportId);
-
       if (report == null) {
-        setState(() {
-          _error = "리포트를 불러오지 못했습니다.";
-        });
+        setState(() => _error = "리포트를 불러오지 못했습니다.");
         return;
       }
 
-      // 🔹 aggregatedTimeline 처리
       final timeline = report['aggregatedTimeline'] ?? {};
       final points = (timeline['points'] ?? []) as List;
 
-      points.sort((a, b) {
-        final minA = (a['minute'] ?? 0) as num;
-        final minB = (b['minute'] ?? 0) as num;
-        return minA.compareTo(minB);
-      });
+      if (points.isEmpty) {
+        for (int i = 0; i <= 9; i++) {
+          points.add({
+            "minute": i,
+            "avgScores": {for (var e in colorsEmotions) e: 0.0}
+          });
+        }
+      }
+
+      points.sort((a, b) => (a['minute'] ?? 0).compareTo(b['minute'] ?? 0));
 
       emotionSpots = {};
       for (var point in points) {
         final minute = (point['minute'] ?? 0).toDouble();
         final avgScores = Map<String, dynamic>.from(point['avgScores'] ?? {});
-
-        avgScores.forEach((engEmotion, score) {
-          final krEmotion = emotionMap[engEmotion] ?? engEmotion;
-          emotionSpots.putIfAbsent(krEmotion, () => []);
-          emotionSpots[krEmotion]!.add(FlSpot(minute, (score as num).toDouble()));
-        });
+        for (var emotion in colorsEmotions) {
+          final score = (avgScores[emotion] ?? 0).toDouble();
+          emotionSpots.putIfAbsent(emotion, () => []);
+          emotionSpots[emotion]!.add(FlSpot(minute, score));
+        }
       }
 
       setState(() {
         _report = report;
-        if (_selectedEmotions.isEmpty && emotions.isNotEmpty) {
-          _selectedEmotions.add(emotions[0]);
+        if (_selectedEmotions.isEmpty && colorsEmotions.isNotEmpty) {
+          _selectedEmotions.add(colorsEmotions[0]);
         }
       });
     } catch (e) {
-      setState(() {
-        _error = "리포트 로드 오류: $e";
-      });
+      setState(() => _error = "리포트 로드 오류: $e");
     } finally {
       setState(() => _loading = false);
     }
+  }
+
+  Widget _buildEmotionButtons() {
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: colorsEmotions.map((emotion) {
+            final isSelected = _selectedEmotions.contains(emotion);
+            final colorIdx = colorsEmotions.indexOf(emotion);
+            final color = colors[colorIdx % colors.length];
+
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  if (isSelected) {
+                    _selectedEmotions.remove(emotion);
+                  } else {
+                    _selectedEmotions.add(emotion);
+                  }
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: const EdgeInsets.symmetric(horizontal: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? color.withOpacity(0.3)
+                      : Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isSelected ? color : Colors.grey.shade400,
+                    width: 1.2,
+                  ),
+                ),
+                child: Text(
+                  emotionMap[emotion] ?? emotion,
+                  style: TextStyle(
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    color: isSelected ? Colors.black : Colors.black87,
+                    fontSize: 14,
+                    fontFamily: 'GowunBatang',
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+
+  Widget _buildLineChart() {
+    double maxX = emotionSpots.values.expand((list) => list).fold<double>(0, (prev, spot) => spot.x > prev ? spot.x : prev);
+    if (maxX == 0) maxX = 1;
+
+    return LineChart(
+      LineChartData(
+        minX: 0,
+        maxX: maxX,
+        minY: 0,
+        maxY: 1,
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: true,
+          getDrawingHorizontalLine: (value) => FlLine(color: Colors.grey.withOpacity(0.15), strokeWidth: 1),
+          getDrawingVerticalLine: (value) => FlLine(color: Colors.grey.withOpacity(0.15), strokeWidth: 1),
+        ),
+        borderData: FlBorderData(
+          show: true,
+          border: Border.all(color: Colors.black12, width: 1.5),
+        ),
+        titlesData: FlTitlesData(
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              interval: 1,
+              getTitlesWidget: (value, meta) => Text("${value.toInt()}분", style: const TextStyle(fontFamily: 'GowunBatang', fontSize: 10, color: Colors.black87)),
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              interval: 0.2,
+              getTitlesWidget: (value, meta) => Text(value.toStringAsFixed(1), style: const TextStyle(fontFamily: 'GowunBatang', fontSize: 10, color: Colors.black87)),
+            ),
+          ),
+          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        lineBarsData: emotionSpots.entries
+            .where((e) => _selectedEmotions.contains(e.key))
+            .map((e) {
+          final idx = colorsEmotions.indexOf(e.key);
+          final color = colors[idx % colors.length];
+          return LineChartBarData(
+            isCurved: true,
+            barWidth: 3.5,
+            isStrokeCapRound: true,
+            shadow: Shadow(color: Colors.black.withOpacity(0.25), blurRadius: 6, offset: const Offset(2, 4)),
+            spots: e.value,
+            gradient: LinearGradient(colors: [color.withOpacity(0.95), color.withOpacity(0.4)], begin: Alignment.topCenter, end: Alignment.bottomCenter),
+            dotData: FlDotData(
+              show: true,
+              getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
+                radius: 3.5,
+                color: Colors.white,
+                strokeWidth: 2,
+                strokeColor: color.withOpacity(0.9),
+              ),
+            ),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [color.withOpacity(0.4), color.withOpacity(0.05)]),
+            ),
+          );
+        }).toList(),
+      ),
+      duration: const Duration(milliseconds: 600),
+    );
   }
 
   @override
@@ -128,7 +248,6 @@ class _ChatReportDetailScreenState extends State<ChatReportDetailScreen> {
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.black,
         elevation: 0,
-        automaticallyImplyLeading: true, // ← 뒤로가기 버튼 활성화
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -138,177 +257,92 @@ class _ChatReportDetailScreenState extends State<ChatReportDetailScreen> {
           ),
         ),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _loading
-                ? const Center(child: CircularProgressIndicator(color: Colors.black))
-                : _error != null
-                ? Center(
-              child: Text(
-                _error!,
-                style: const TextStyle(
-                  fontFamily: 'GowunBatang',
-                  fontSize: 16,
-                  color: Colors.black,
+          child: _loading
+              ? const Center(child: CircularProgressIndicator(color: Colors.black))
+              : _error != null
+              ? Center(
+            child: Text(
+              _error!,
+              style: const TextStyle(fontFamily: 'GowunBatang', fontSize: 16, color: Colors.black),
+            ),
+          )
+              : SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                /// 🔹 1. LineChart
+                Container(
+                  height: screenHeight * 0.35,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(12),
+                  child: _buildLineChart(),
                 ),
-              ),
-            )
-                : _buildReportContent(screenHeight),
+
+                const SizedBox(height: 12),
+
+                /// 🔹 2. 감정 버튼 (LineChart 아래)
+                _buildEmotionButtons(),
+
+                const SizedBox(height: 16),
+
+                /// 🔹 3. 방사형 그래프
+                Container(
+                  height: screenHeight * 0.35,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(12),
+                  child: const Center(child: Text("여기에 방사형 그래프 들어감")), // TODO: RadarChart
+                ),
+
+                const SizedBox(height: 20),
+
+                /// 🔹 4. 노트 이미지 + 피드백
+                Container(
+                  constraints: const BoxConstraints(minHeight: 400),
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    image: const DecorationImage(
+                      image: AssetImage("assets/images/ConnectBeat_Note.png"),
+                      fit: BoxFit.cover,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(45, 40, 45, 32),
+                  child: Text(
+                    _report?['gptFeedback'] ?? '피드백 데이터가 없습니다.',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      height: 1.6,
+                      fontFamily: 'GowunBatang',
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildReportContent(double screenHeight) {
-    final detailedEmotions =
-    List<Map<String, dynamic>>.from(_report?['detailedEmotions'] ?? []);
-
-    double maxX = emotionSpots.values
-        .expand((list) => list)
-        .fold<double>(0, (prev, spot) => spot.x > prev ? spot.x : prev);
-
-    double bottomInterval = (maxX / 5).ceilToDouble();
-    bottomInterval = bottomInterval > 0 ? bottomInterval : 1;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Container(
-          height: screenHeight * 0.35,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.85),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: LineChart(
-              LineChartData(
-                minY: 0,
-                maxY: 1,
-                minX: 0,
-                maxX: maxX,
-                gridData: FlGridData(show: true, drawVerticalLine: false),
-                titlesData: FlTitlesData(
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      interval: bottomInterval,
-                      getTitlesWidget: (value, meta) => Text(
-                        "${value.toInt()}분",
-                        style: const TextStyle(
-                          fontFamily: 'GowunBatang',
-                          color: Colors.black,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      interval: 0.2,
-                      getTitlesWidget: (value, meta) => Text(
-                        value.toStringAsFixed(1),
-                        style: const TextStyle(
-                          fontFamily: 'GowunBatang',
-                          color: Colors.black,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ),
-                  ),
-                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                ),
-                borderData: FlBorderData(show: false),
-                lineBarsData: emotionSpots.entries
-                    .where((e) => _selectedEmotions.contains(e.key))
-                    .map((e) {
-                  final idx = emotions.indexOf(e.key);
-                  return LineChartBarData(
-                    isCurved: true,
-                    barWidth: 2,
-                    spots: e.value,
-                    color: colors[idx % colors.length],
-                    dotData: FlDotData(show: true),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: colors[idx % colors.length].withOpacity(0.1),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Container(
-          height: 50,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: List.generate(emotions.length, (index) {
-                final emotion = emotions[index];
-                final isSelected = _selectedEmotions.contains(emotion);
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      if (isSelected) {
-                        _selectedEmotions.remove(emotion);
-                      } else {
-                        _selectedEmotions.add(emotion);
-                      }
-                    });
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    margin: const EdgeInsets.symmetric(horizontal: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? colors[index % colors.length].withOpacity(0.3)
-                          : Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      emotion,
-                      style: TextStyle(
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected ? Colors.black : Colors.black87,
-                        fontSize: 14,
-                        fontFamily: 'GowunBatang',
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.85),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: SingleChildScrollView(
-              child: Text(
-                _report?['gptFeedback'] ?? '피드백 데이터가 없습니다.',
-                style: const TextStyle(
-                  fontFamily: 'GowunBatang',
-                  fontSize: 16,
-                  color: Colors.black87,
-                  height: 1.5,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

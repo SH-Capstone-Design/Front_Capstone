@@ -9,19 +9,15 @@ class ChatReportListScreen extends ConsumerWidget {
 
   const ChatReportListScreen({super.key, required this.coupleId});
 
-  /// 🔹 createdAt 기반 제목 포맷
   String formatReportTitle(String? createdAt) {
     if (createdAt == null || createdAt.isEmpty) return "감정 리포트";
-
     final dt = DateTime.tryParse(createdAt);
     if (dt == null) return "감정 리포트";
-
     return "${dt.year}년 ${dt.month}월 ${dt.day}일의 감정 리포트";
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    const titleFontSize = 22.0;
     const infoFontSize = 18.0;
 
     if (coupleId == null) {
@@ -67,11 +63,11 @@ class ChatReportListScreen extends ConsumerWidget {
                 }
 
                 return Column(
-                  crossAxisAlignment: CrossAxisAlignment.center, // 중앙 정렬
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     const Text(
                       '대화 리포트 목록',
-                      textAlign: TextAlign.center, // 텍스트 중앙 정렬
+                      textAlign: TextAlign.center,
                       style: TextStyle(
                         fontFamily: 'GowunBatang',
                         fontSize: 22,
@@ -93,19 +89,22 @@ class ChatReportListScreen extends ConsumerWidget {
                             color: Colors.white,
                             margin: const EdgeInsets.symmetric(vertical: 8),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                             child: ListTile(
                               title: Text(
                                 formatReportTitle(createdAt),
                                 style: const TextStyle(
-                                    fontFamily: 'GowunBatang',
-                                    fontWeight: FontWeight.bold),
+                                  fontFamily: 'GowunBatang',
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                               subtitle: summary.isNotEmpty
                                   ? Text(
                                 summary,
                                 style: const TextStyle(
-                                    fontFamily: 'GowunBatang'),
+                                  fontFamily: 'GowunBatang',
+                                ),
                               )
                                   : null,
                               onTap: () {
@@ -127,7 +126,8 @@ class ChatReportListScreen extends ConsumerWidget {
                   ],
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator(color: Colors.black)),
+              loading: () =>
+              const Center(child: CircularProgressIndicator(color: Colors.black)),
               error: (err, _) => Center(
                 child: Text(
                   '에러: $err',

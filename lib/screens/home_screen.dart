@@ -182,7 +182,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _showInvitationDialog({required String chatSessionId, required String? inviterId}) {
-    final partnerNickname = inviterId ?? '상대방';
+    final coupleStatus = ref.read(coupleStatusProvider).maybeWhen(
+      data: (data) => data,
+      orElse: () => null,
+    );
+
+    String partnerNickname = '상대방';
+    if (coupleStatus != null && inviterId != null && coupleStatus['partnerId'] == inviterId) {
+      partnerNickname = coupleStatus['partnerNickname'] ?? inviterId;
+    }
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -206,10 +215,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 await repo.subscribeRoom(chatSessionId: chatSessionId);
                 await repo.sendJoin(chatSessionId: chatSessionId);
               }
-              final userId = ref.read(userProvider).maybeWhen(
-                data: (u) => u['userId'] ?? "unknown",
-                orElse: () => "unknown",
-              );
               if (context.mounted && !_hasNavigatedToChat) {
                 _hasNavigatedToChat = true;
                 Navigator.pushReplacement(
@@ -217,7 +222,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   MaterialPageRoute(
                     builder: (_) => ChatRoomScreen(
                       room: ChatRoom(chatSessionId: chatSessionId),
-                      currentUserId: userId,
+                      currentUserId: ref.read(userProvider).maybeWhen(
+                        data: (u) => u['userId'] ?? "unknown",
+                        orElse: () => "unknown",
+                      ),
                       autoStart: false,
                     ),
                   ),
@@ -230,6 +238,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     );
   }
+
 
   @override
   Widget build(BuildContext context) {

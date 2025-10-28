@@ -1,9 +1,7 @@
-import 'package:connectbeat/services/couple_service.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/services/chat_report_service.dart';
-import 'package:connectbeat/screens/chathistory_screen.dart';
 
 class EmotionResultScreen extends StatefulWidget {
   final String chatSessionId;
@@ -18,7 +16,6 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
   Map<String, dynamic>? _report;
   String? _error;
 
-  /// 🔹 감정 매핑 (영문 → 한글)
   final Map<String, String> emotionMap = {
     "Joy": "기쁨",
     "Love": "설렘",
@@ -30,29 +27,22 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
     "Neutral": "중립",
   };
 
-  final List<String> emotions = [
-    "기쁨",
-    "설렘",
-    "슬픔",
-    "실망",
-    "후회",
-    "짜증",
-    "불안",
-    "중립",
+  final List<String> colorsEmotions = [
+    "Joy","Love","Sadness","Disappointment","Regret","Anger","Anxiety","Neutral"
   ];
 
   final List<Color> colors = [
-    const Color(0xFFFFFC2A), // 기쁨
-    const Color(0xFFA6FF76), // 설렘
-    const Color(0xFF1F3580), // 슬픔
-    const Color(0xFF98FFF0), // 실망
-    const Color(0xFFFF6C6C), // 후회
-    const Color(0xFFFFA665), // 짜증
-    const Color(0xFFB56EFF), // 불안
-    const Color(0xFFAAAAAA), // 중립
+    const Color(0xFFFFFC2A), // Joy
+    const Color(0xFFA6FF76), // Love
+    const Color(0xFF1F3580), // Sadness
+    const Color(0xFF98FFF0), // Disappointment
+    const Color(0xFFFF6C6C), // Regret
+    const Color(0xFFFFA665), // Anger
+    const Color(0xFFB56EFF), // Anxiety
+    const Color(0xFFAAAAAA), // Neutral
   ];
 
-  Set<String> _selectedEmotions = {}; // 멀티 선택
+  Set<String> _selectedEmotions = {};
   Map<String, List<FlSpot>> emotionSpots = {};
 
   @override
@@ -63,52 +53,137 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
 
   Future<void> _fetchReport() async {
     setState(() => _loading = true);
-
     try {
       final report = await ChatReportService.generateReport(widget.chatSessionId);
-
       if (report == null) {
-        setState(() {
-          _error = "리포트를 불러오지 못했습니다.";
-        });
+        setState(() => _error = "리포트를 불러오지 못했습니다.");
         return;
       }
 
-      // 🔹 감정 데이터 매핑 및 그래프용 변환
-      final timeline = report['aggregatedTimeline'] ?? {};
-      final points = (timeline['points'] ?? []) as List;
+      final points = (report['aggregatedTimeline']?['points'] ?? []) as List;
+      if (points.isEmpty) {
+        for (int i = 0; i <= 9; i++) {
+          points.add({"minute": i,"avgScores": {for (var e in colorsEmotions) e: 0.0}});
+        }
+      }
 
-      points.sort((a, b) {
-        final minA = (a['minute'] ?? 0) as num;
-        final minB = (b['minute'] ?? 0) as num;
-        return minA.compareTo(minB);
-      });
+      points.sort((a,b) => (a['minute']??0).compareTo(b['minute']??0));
 
       emotionSpots = {};
       for (var point in points) {
-        final minute = (point['minute'] ?? 0).toDouble();
-        final avgScores = Map<String, dynamic>.from(point['avgScores'] ?? {});
-
-        avgScores.forEach((engEmotion, score) {
-          final krEmotion = emotionMap[engEmotion] ?? engEmotion;
-          emotionSpots.putIfAbsent(krEmotion, () => []);
-          emotionSpots[krEmotion]!.add(FlSpot(minute, (score as num).toDouble()));
-        });
+        final minute = (point['minute']??0).toDouble();
+        final avgScores = Map<String,dynamic>.from(point['avgScores']??{});
+        for (var emotion in colorsEmotions) {
+          final score = (avgScores[emotion] ?? 0).toDouble();
+          emotionSpots.putIfAbsent(emotion, () => []);
+          emotionSpots[emotion]!.add(FlSpot(minute, score));
+        }
       }
 
       setState(() {
         _report = report;
-        if (_selectedEmotions.isEmpty && emotions.isNotEmpty) {
-          _selectedEmotions.add(emotions[0]); // 기본 선택
+        if (_selectedEmotions.isEmpty && colorsEmotions.isNotEmpty) {
+          _selectedEmotions.add(colorsEmotions[0]);
         }
       });
     } catch (e) {
-      setState(() {
-        _error = "리포트 로드 오류: $e";
-      });
+      setState(() => _error = "리포트 로드 오류: $e");
     } finally {
       setState(() => _loading = false);
     }
+  }
+
+  Widget _buildEmotionButtons() {
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: colorsEmotions.map((emotion) {
+            final isSelected = _selectedEmotions.contains(emotion);
+            final colorIdx = colorsEmotions.indexOf(emotion);
+            final color = colors[colorIdx % colors.length];
+
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  if (isSelected) _selectedEmotions.remove(emotion);
+                  else _selectedEmotions.add(emotion);
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: const EdgeInsets.symmetric(horizontal: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected ? color.withOpacity(0.3) : Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isSelected ? color : Colors.grey.shade400,
+                    width: 1.2,
+                  ),
+                ),
+                child: Text(
+                  emotionMap[emotion] ?? emotion,
+                  style: TextStyle(
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    color: isSelected ? Colors.black : Colors.black87,
+                    fontSize: 14,
+                    fontFamily: 'GowunBatang',
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLineChart() {
+    double maxX = emotionSpots.values.expand((list)=>list).fold<double>(0, (prev, spot)=>spot.x>prev?spot.x:prev);
+    if (maxX==0) maxX=1;
+
+    return LineChart(
+      LineChartData(
+        minX:0,
+        maxX:maxX,
+        minY:0,
+        maxY:1,
+        gridData: FlGridData(
+          show:true,
+          drawVerticalLine:true,
+          getDrawingHorizontalLine:(v)=>FlLine(color:Colors.grey.withOpacity(0.15), strokeWidth:1),
+          getDrawingVerticalLine:(v)=>FlLine(color:Colors.grey.withOpacity(0.15), strokeWidth:1),
+        ),
+        borderData: FlBorderData(
+          show:true,
+          border: Border.all(color:Colors.black12,width:1.5),
+        ),
+        titlesData: FlTitlesData(
+          bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles:true, interval:1, getTitlesWidget:(value,meta)=>Text("${value.toInt()}분", style:const TextStyle(fontFamily:'GowunBatang', fontSize:10,color:Colors.black87)))),
+          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles:true, interval:0.2, getTitlesWidget:(v,meta)=>Text(v.toStringAsFixed(1), style:const TextStyle(fontFamily:'GowunBatang', fontSize:10,color:Colors.black87)))),
+          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles:false)),
+          topTitles: AxisTitles(sideTitles: SideTitles(showTitles:false)),
+        ),
+        lineBarsData: emotionSpots.entries.where((e)=>_selectedEmotions.contains(e.key)).map((e){
+          final idx = colorsEmotions.indexOf(e.key);
+          final color = colors[idx % colors.length];
+          return LineChartBarData(
+            isCurved:true,
+            barWidth:3.5,
+            isStrokeCapRound:true,
+            shadow: Shadow(color:Colors.black.withOpacity(0.25), blurRadius:6, offset:const Offset(2,4)),
+            spots:e.value,
+            gradient: LinearGradient(colors:[color.withOpacity(0.95), color.withOpacity(0.4)], begin:Alignment.topCenter,end:Alignment.bottomCenter),
+            dotData: FlDotData(show:true, getDotPainter:(spot,percent,barData,index)=>FlDotCirclePainter(radius:3.5, color:Colors.white, strokeWidth:2, strokeColor:color.withOpacity(0.9))),
+            belowBarData: BarAreaData(show:true, gradient: LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter, colors:[color.withOpacity(0.4), color.withOpacity(0.05)])),
+          );
+        }).toList(),
+      ),
+      duration: const Duration(milliseconds:600),
+    );
   }
 
   @override
@@ -116,240 +191,70 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
     final screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
+      extendBodyBehindAppBar:true,
+      appBar: AppBar(
+        title: const Text("감정 분석 리포트", style: TextStyle(fontFamily:'GowunBatang', fontSize:22,fontWeight:FontWeight.bold,color:Colors.black87)),
+        backgroundColor:Colors.transparent,
+        foregroundColor:Colors.black,
+        elevation:0,
+      ),
       body: Container(
         decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage(AppConstants.backgroundPath),
-            fit: BoxFit.cover,
-          ),
+          image: DecorationImage(image: AssetImage(AppConstants.backgroundPath), fit: BoxFit.cover),
         ),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _loading
-                ? const Center(child: CircularProgressIndicator(color: Colors.black))
-                : _error != null
-                ? Center(
-              child: Text(
-                _error!,
-                style: const TextStyle(
-                  fontFamily: 'GowunBatang',
-                  fontSize: 16,
-                  color: Colors.black,
-                ),
-              ),
-            )
-                : _buildReportContent(screenHeight),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReportContent(double screenHeight) {
-    // 🔹 maxX 계산
-    double maxX = emotionSpots.values
-        .expand((list) => list)
-        .fold<double>(0, (prev, spot) => spot.x > prev ? spot.x : prev);
-
-    double bottomInterval = (maxX / 5).ceilToDouble();
-    bottomInterval = bottomInterval > 0 ? bottomInterval : 1;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        const SizedBox(height: 10),
-        const Text(
-          "감정 분석 리포트",
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'GowunBatang',
-            color: Colors.black87,
-          ),
-        ),
-        const SizedBox(height: 8),
-
-        // 🔹 감정 그래프
-        Container(
-          height: screenHeight * 0.35,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.85),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: LineChart(
-              LineChartData(
-                minY: 0,
-                maxY: 1,
-                minX: 0,
-                maxX: maxX,
-                gridData: FlGridData(show: true, drawVerticalLine: false),
-                titlesData: FlTitlesData(
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      interval: bottomInterval,
-                      getTitlesWidget: (value, meta) =>
-                          Text("${value.toInt()}분", style: const TextStyle(fontFamily: 'GowunBatang', color: Colors.black, fontSize: 10)),
-                    ),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      interval: 0.2,
-                      getTitlesWidget: (value, meta) =>
-                          Text(value.toStringAsFixed(1), style: const TextStyle(fontFamily: 'GowunBatang', color: Colors.black, fontSize: 10)),
-                    ),
-                  ),
-                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                ),
-                borderData: FlBorderData(show: false),
-                lineBarsData: emotionSpots.entries
-                    .where((e) => _selectedEmotions.contains(e.key))
-                    .map((e) {
-                  final idx = emotions.indexOf(e.key);
-                  return LineChartBarData(
-                    isCurved: true,
-                    barWidth: 2,
-                    spots: e.value,
-                    color: colors[idx % colors.length],
-                    dotData: FlDotData(show: true),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: colors[idx % colors.length].withOpacity(0.1),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 10),
-
-        // 🔹 감정 선택 버튼
-        Container(
-          height: 50,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: List.generate(emotions.length, (index) {
-                final emotion = emotions[index];
-                final isSelected = _selectedEmotions.contains(emotion);
-
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      if (isSelected) {
-                        _selectedEmotions.remove(emotion);
-                      } else {
-                        _selectedEmotions.add(emotion);
-                      }
-                    });
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    margin: const EdgeInsets.symmetric(horizontal: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? colors[index % colors.length].withOpacity(0.3)
-                          : Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      emotion,
-                      style: TextStyle(
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected ? Colors.black : Colors.black87,
-                        fontSize: 14,
-                        fontFamily: 'GowunBatang',
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 10),
-
-        // 🔹 피드백 + ChatReportListScreen 이동 버튼
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.85),
-              borderRadius: BorderRadius.circular(16),
-            ),
+          child: _loading? const Center(child:CircularProgressIndicator(color:Colors.black))
+              : _error!=null? Center(child:Text(_error!, style:const TextStyle(fontFamily:'GowunBatang', fontSize:16,color:Colors.black)))
+              : SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal:16,vertical:12),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "감정 분석에 대한 레포트",
-                  style: TextStyle(
-                    fontFamily: 'GowunBatang',
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children:[
+                // 1. LineChart
+                Container(
+                  height: screenHeight*0.35,
+                  decoration: BoxDecoration(
+                    color:Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow:[BoxShadow(color:Colors.black.withOpacity(0.2), blurRadius:12, offset:const Offset(0,6))],
                   ),
+                  padding: const EdgeInsets.all(12),
+                  child: _buildLineChart(),
                 ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        Text(
-                          _report?['gptFeedback'] ?? '피드백 데이터가 없습니다.',
-                          style: const TextStyle(
-                            fontFamily: 'GowunBatang',
-                            fontSize: 16,
-                            color: Colors.black87,
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.pushNamedAndRemoveUntil(
-                                context,
-                                '/home', // 메인 화면 라우트 이름
-                                    (route) => false, // 기존 스택 모두 제거
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFFFEEFF),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: const Text(
-                              "메인으로 이동",
-                              style: TextStyle(
-                                fontFamily: 'GowunBatang',
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                const SizedBox(height:12),
+                // 2. 감정 버튼
+                _buildEmotionButtons(),
+                const SizedBox(height:16),
+                // 3. 방사형 그래프
+                Container(
+                  height:screenHeight*0.35,
+                  decoration: BoxDecoration(
+                    color:Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow:[BoxShadow(color:Colors.black.withOpacity(0.2), blurRadius:12, offset:const Offset(0,6))],
+                  ),
+                  padding: const EdgeInsets.all(12),
+                  child: const Center(child:Text("여기에 방사형 그래프 들어감")),
+                ),
+                const SizedBox(height:20),
+                // 4. 피드백 노트
+                Container(
+                  constraints: const BoxConstraints(minHeight:400),
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    image: const DecorationImage(image: AssetImage("assets/images/ConnectBeat_Note.png"), fit: BoxFit.cover),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(45,40,45,32),
+                  child: Text(_report?['gptFeedback'] ?? '피드백 데이터가 없습니다.',
+                    style: const TextStyle(fontSize:16, height:1.6, fontFamily:'GowunBatang', color:Colors.black87),
                   ),
                 ),
               ],
             ),
           ),
         ),
-      ],
+      ),
     );
   }
 }
