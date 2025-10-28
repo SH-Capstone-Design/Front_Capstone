@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- ✅ 인터넷 퍼미션 추가 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application
         android:label="connectbeat"
         android:name="${applicationName}"

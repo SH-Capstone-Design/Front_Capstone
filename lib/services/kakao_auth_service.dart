@@ -81,72 +81,91 @@ Future<void> _checkCoupleConnection(
   }
 }
 
-/// ✅ 메인 카카오 로그인 함수
+bool _isLoggingIn = false; // ✅ 중복 로그인 방지용 플래그
+
+/// ✅ 카카오 로그인 진입점 (자동 로그인 or 신규 로그인)
 Future<void> signInWithKakao(BuildContext context) async {
-  print("✅ signInWithKakao() 호출됨");
+  if (_isLoggingIn) {
+    _logger.warning("⚠️ 이미 로그인 중입니다.");
+    return;
+  }
+  _isLoggingIn = true;
 
-  if (await AuthApi.instance.hasToken()) {
-    try {
-      final tokenInfo = await UserApi.instance.accessTokenInfo();
-      _logger.info('토큰 유효: ${tokenInfo.id} 만료까지: ${tokenInfo.expiresIn}');
+  try {
+    print("✅ signInWithKakao() 호출됨");
 
-      final OAuthToken? token =
-      await TokenManagerProvider.instance.manager.getToken();
-      if (token == null) throw Exception('토큰 없음');
+    // ✅ 1️⃣ 이미 토큰이 존재하면 유효성 검사
+    if (await AuthApi.instance.hasToken()) {
+      try {
+        final tokenInfo = await UserApi.instance.accessTokenInfo();
+        _logger.info('토큰 유효: ${tokenInfo.id} 만료까지: ${tokenInfo.expiresIn}초');
 
-      final userInfo = await _getUserInfo(accessToken: token.accessToken);
-      print("✅ 로그인 완료. accessToken: ${token.accessToken}");
+        final token = await TokenManagerProvider.instance.manager.getToken();
+        if (token == null) throw Exception('토큰 없음');
 
-      if (userInfo != null) {
-        await _checkCoupleConnection(context, userInfo);
+        final userInfo = await _getUserInfo(accessToken: token.accessToken);
+        if (userInfo != null) {
+          await _checkCoupleConnection(context, userInfo);
+          return;
+        }
+      } catch (e) {
+        _logger.warning('⚠️ 기존 토큰이 만료되었거나 유효하지 않음: $e');
       }
-    } catch (error) {
-      _logger.warning('⚠️ 토큰 정보 조회 실패: $error');
-      await loginWithKakaoAccount(context);
     }
-  } else {
-    await loginWithKakaoAccount(context);
+
+    // ✅ 2️⃣ 토큰이 없거나 만료된 경우 새 로그인 시도
+    await _loginWithKakao(context);
+  } catch (e) {
+    _logger.severe("❌ signInWithKakao() 실패: $e");
+  } finally {
+    _isLoggingIn = false;
   }
 }
 
-/// ✅ 카카오톡 앱으로 로그인 (시뮬레이터 호환 포함)
-Future<void> loginWithKakaoAccount(BuildContext context) async {
-  print("🔥 loginWithKakaoAccount() 실행");
+/// ✅ 카카오 로그인 (앱 로그인 우선, 실패 시 웹 fallback)
+Future<void> _loginWithKakao(BuildContext context) async {
+  print("🔥 _loginWithKakao() 실행");
 
   bool isTalkInstalled = false;
   try {
     isTalkInstalled = await isKakaoTalkInstalled();
   } catch (e) {
-    print("⚠️ 시뮬레이터에서는 isKakaoTalkInstalled() 호출 불가, fallback 사용");
+    print("⚠️ 시뮬레이터에서는 isKakaoTalkInstalled() 호출 불가 → fallback 사용");
   }
 
-  if (isTalkInstalled) {
-    try {
-      OAuthToken token = await UserApi.instance.loginWithKakaoTalk();
-      _logger.info('카카오톡 로그인 성공: ${token.accessToken}');
+  try {
+    if (isTalkInstalled) {
+      // ✅ 1️⃣ 카카오톡 앱 로그인 시도
+      final OAuthToken token = await UserApi.instance.loginWithKakaoTalk();
+      _logger.info('✅ 카카오톡 로그인 성공: ${token.accessToken}');
 
       final userInfo = await _getUserInfo(accessToken: token.accessToken);
       if (userInfo != null) {
         await _checkCoupleConnection(context, userInfo);
       }
-    } catch (error) {
-      if (error is PlatformException && error.code == 'CANCELED') return;
-      print("⚠️ 카카오톡 로그인 실패, fallback 호출");
-      await _loginWithKakaoAccountFallback(context);
+      return; // 👈 앱 로그인 성공 시 종료
     }
-  } else {
-    // 시뮬레이터 또는 카톡 설치 안 된 경우
-    print("ℹ️ KakaoTalk 설치 안됨 → Fallback 로그인으로 진행");
+
+    // ✅ 2️⃣ fallback: 웹 로그인
+    print("🌐 fallback: 카카오계정 로그인 실행");
     await _loginWithKakaoAccountFallback(context);
+
+  } on PlatformException catch (e) {
+    if (e.code == 'CANCELED') {
+      print("⚠️ 사용자가 로그인 취소함");
+      return;
+    }
+    _logger.severe("❌ PlatformException 발생: $e");
+  } catch (e) {
+    _logger.severe("❌ 카카오 로그인 중 오류: $e");
   }
 }
 
-/// ✅ 카카오계정 로그인 (웹 기반 fallback)
-/// ✅ 카카오계정 로그인 (웹 기반 fallback)
+/// ✅ fallback (카카오계정 웹 로그인)
 Future<void> _loginWithKakaoAccountFallback(BuildContext context) async {
   try {
-    OAuthToken token = await UserApi.instance.loginWithKakaoAccount(); // <- redirectUri 제거
-    _logger.info('카카오계정 로그인 성공: ${token.accessToken}');
+    final OAuthToken token = await UserApi.instance.loginWithKakaoAccount();
+    _logger.info('✅ 카카오계정 로그인 성공: ${token.accessToken}');
 
     final userInfo = await _getUserInfo(accessToken: token.accessToken);
     if (userInfo != null) {
@@ -155,7 +174,7 @@ Future<void> _loginWithKakaoAccountFallback(BuildContext context) async {
   } catch (error) {
     _logger.severe('❌ 카카오계정 로그인 실패: $error');
     if (error.toString().contains('REDIRECT_URI_MISMATCH')) {
-      print("⚠️ 시뮬레이터에서는 redirectUri 설정 확인 필요");
+      print("⚠️ redirectUri 설정 확인 필요 (AndroidManifest or Kakao 콘솔)");
     }
   }
 }
