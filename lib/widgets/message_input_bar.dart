@@ -27,6 +27,7 @@ class _MessageInputBarState extends State<MessageInputBar> {
   Future<void> _handleSend() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _sending || !widget.enabled) return;
+
     setState(() => _sending = true);
     try {
       await widget.onSend(text);
@@ -55,13 +56,19 @@ class _MessageInputBarState extends State<MessageInputBar> {
                 minLines: 1,
                 maxLines: 4,
                 textInputAction: TextInputAction.newline,
+                // **폰트 지정 제거** -> 이모지 깨지지 않음
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.black87,
+                ),
                 decoration: InputDecoration(
                   hintText: '메시지를 입력하세요',
                   border: OutlineInputBorder(borderSide: BorderSide.none),
                   isDense: true,
                   filled: true,
                   fillColor: Colors.grey[100],
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                  contentPadding:
+                  const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                 ),
               ),
             ),

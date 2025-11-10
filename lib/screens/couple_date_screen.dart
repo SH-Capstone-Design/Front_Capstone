@@ -164,6 +164,7 @@ class _CoupleDateScreenState extends ConsumerState<CoupleDateScreen> {
 
   @override
   void dispose() {
+    DateWebsocketService.disconnect();
     yearController.dispose();
     monthController.dispose();
     dayController.dispose();

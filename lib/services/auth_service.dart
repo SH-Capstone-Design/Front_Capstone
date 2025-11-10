@@ -9,7 +9,7 @@ class UserModel {
   final String id;
   final String status;
   final String? nickname;
-  final String? profileImageUrl;
+  final String? profileImage;
   final String? coupleId;
   final String? partnerNickname;
 
@@ -17,7 +17,7 @@ class UserModel {
     required this.id,
     required this.status,
     this.nickname,
-    this.profileImageUrl,
+    this.profileImage,
     this.coupleId,
     this.partnerNickname,
   });
@@ -27,7 +27,7 @@ class UserModel {
       id: json['id'].toString(),
       status: json['status'] ?? '',
       nickname: json['nickname'],
-      profileImageUrl: json['profileImageUrl'],
+      profileImage: json['profileImage'],
       coupleId: json['coupleId']?.toString(),
       partnerNickname: json['partnerNickname'],
     );
@@ -64,10 +64,10 @@ class AuthService {
     if (token != null) {
       return {
         'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json; charset=UTF-8',
       };
     }
-    return {'Content-Type': 'application/json'};
+    return {'Content-Type': 'application/json; charset=UTF-8'};
   }
 
   // ✅ 로그아웃
@@ -89,7 +89,8 @@ class AuthService {
     try {
       final parts = token.split('.');
       if (parts.length != 3) return null;
-      final payload = utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
+      final payload =
+      utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
       return jsonDecode(payload)['sub']?.toString();
     } catch (e) {
       print('JWT 디코딩 오류: $e');
@@ -107,7 +108,7 @@ class AuthService {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
         return UserModel.fromJson(data);
       } else if (response.statusCode == 403) {
         print("⚠️ 인증 실패(403): 토큰 만료 가능성");
@@ -119,28 +120,6 @@ class AuthService {
       }
     } catch (e) {
       print('프로필 조회 오류: $e');
-      return null;
-    }
-  }
-
-  // ✅ 커플 상태 조회
-  static Future<UserModel?> fetchCoupleStatus() async {
-    try {
-      final headers = await buildAuthHeader();
-      final response = await http.get(
-        Uri.parse('$baseUrl/couples/status'),
-        headers: headers,
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return UserModel.fromJson(data);
-      } else {
-        print('커플 상태 조회 실패: ${response.statusCode}');
-        return null;
-      }
-    } catch (e) {
-      print('커플 상태 조회 오류: $e');
       return null;
     }
   }

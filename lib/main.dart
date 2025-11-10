@@ -7,7 +7,6 @@ import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:connectbeat/routes/app_router.dart';
 import 'package:logging/logging.dart';
 
-// ✅ 글로벌 키 선언
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final GlobalKey<ScaffoldMessengerState> messengerKey = GlobalKey<ScaffoldMessengerState>();
 
@@ -17,7 +16,6 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
 
-  // ✅ 로그 설정
   Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen((record) {
     print('[${record.level.name}] ${record.loggerName}: ${record.message}');
@@ -52,11 +50,11 @@ class ConnectBeatApp extends StatelessWidget {
           bodyMedium: TextStyle(color: Colors.black),
         ),
         colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFFFFEEFF), // 밝은 로즈핑크
-        brightness: Brightness.light,       // 밝은 테마 유지
+        seedColor: const Color(0xFFFFEEFF),
+        brightness: Brightness.light,
         ),
       ),
-      // ✅ 글로벌 키 적용
+      
       navigatorKey: navigatorKey,
       scaffoldMessengerKey: messengerKey,
       home: const SplashScreen(),

@@ -19,15 +19,18 @@ class ChatReportListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     const infoFontSize = 18.0;
+    const titleFontSize = 22.0;
 
     if (coupleId == null) {
-      return const Center(
-        child: Text(
-          '커플 정보가 없습니다.',
-          style: TextStyle(
-            fontFamily: 'GowunBatang',
-            fontSize: infoFontSize,
-            color: Colors.black54,
+      return const Scaffold(
+        body: Center(
+          child: Text(
+            '커플 정보가 없습니다.',
+            style: TextStyle(
+              fontFamily: 'GowunBatang',
+              fontSize: infoFontSize,
+              color: Colors.black54,
+            ),
           ),
         ),
       );
@@ -36,6 +39,22 @@ class ChatReportListScreen extends ConsumerWidget {
     final reportListAsync = ref.watch(chatReportListProvider(coupleId!));
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: const Text(
+          '대화 리포트 목록',
+          style: TextStyle(
+            fontFamily: 'GowunBatang',
+            fontSize: titleFontSize,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.black87,
+        elevation: 0,
+        centerTitle: true,
+      ),
       body: Container(
         decoration: BoxDecoration(
           image: DecorationImage(
@@ -54,7 +73,7 @@ class ChatReportListScreen extends ConsumerWidget {
                       '리포트가 없습니다.',
                       style: TextStyle(
                         fontFamily: 'GowunBatang',
-                        fontSize: 18,
+                        fontSize: infoFontSize,
                         color: Colors.black54,
                       ),
                       textAlign: TextAlign.center,
@@ -62,72 +81,54 @@ class ChatReportListScreen extends ConsumerWidget {
                   );
                 }
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Text(
-                      '대화 리포트 목록',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontFamily: 'GowunBatang',
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: reports.length,
-                        itemBuilder: (context, index) {
-                          final report = reports[index];
-                          final reportId = report['reportId'] ?? '';
-                          final summary = report['shortFeedbackSummary'] ?? '';
-                          final createdAt = report['createdAt'] ?? '';
+                return ListView.builder(
+                  itemCount: reports.length,
+                  itemBuilder: (context, index) {
+                    final report = reports[index];
+                    final reportId = report['reportId'] ?? '';
+                    final summary = report['shortFeedbackSummary'] ?? '';
+                    final createdAt = report['createdAt'] ?? '';
 
-                          return Card(
-                            color: Colors.white,
-                            margin: const EdgeInsets.symmetric(vertical: 8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: ListTile(
-                              title: Text(
-                                formatReportTitle(createdAt),
-                                style: const TextStyle(
-                                  fontFamily: 'GowunBatang',
-                                  fontWeight: FontWeight.bold,
-                                ),
+                    return Card(
+                      color: Colors.white,
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: ListTile(
+                        title: Text(
+                          formatReportTitle(createdAt),
+                          style: const TextStyle(
+                            fontFamily: 'GowunBatang',
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        subtitle: summary.isNotEmpty
+                            ? Text(
+                          summary,
+                          style: const TextStyle(
+                            fontFamily: 'GowunBatang',
+                          ),
+                        )
+                            : null,
+                        onTap: () {
+                          if (reportId.isNotEmpty) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    ChatReportDetailScreen(reportId: reportId),
                               ),
-                              subtitle: summary.isNotEmpty
-                                  ? Text(
-                                summary,
-                                style: const TextStyle(
-                                  fontFamily: 'GowunBatang',
-                                ),
-                              )
-                                  : null,
-                              onTap: () {
-                                if (reportId.isNotEmpty) {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          ChatReportDetailScreen(reportId: reportId),
-                                    ),
-                                  );
-                                }
-                              },
-                            ),
-                          );
+                            );
+                          }
                         },
                       ),
-                    ),
-                  ],
+                    );
+                  },
                 );
               },
-              loading: () =>
-              const Center(child: CircularProgressIndicator(color: Colors.black)),
+              loading: () => const Center(
+                  child: CircularProgressIndicator(color: Colors.black87)),
               error: (err, _) => Center(
                 child: Text(
                   '에러: $err',

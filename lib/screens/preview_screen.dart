@@ -1,124 +1,75 @@
-import 'dart:async';
-import 'package:connectbeat/core/constants.dart';
 import 'package:flutter/material.dart';
-import 'package:connectbeat/widgets/rounded_button.dart';
+import '../models/store_models.dart';
 
-class PreviewScreen extends StatefulWidget {
-  final String itemName;
-  final String characterFolder; // ex: 'assets/images/characters/ch_2'
+class PreviewScreen extends StatelessWidget {
+  final StoreItemDTO item;
 
-  const PreviewScreen({
-    super.key,
-    required this.itemName,
-    required this.characterFolder,
-  });
-
-  @override
-  State<PreviewScreen> createState() => _PreviewScreenState();
-}
-
-class _PreviewScreenState extends State<PreviewScreen> {
-  late List<String> _frames;
-  int _frameIndex = 0;
-  late Timer _timer;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _timer = Timer.periodic(const Duration(milliseconds: 450), (timer) {
-      if (!mounted) return;
-      setState(() {
-        _frameIndex = (_frameIndex + 1) % _frames.length;
-      });
-    });
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _loadFrames();
-  }
-
-  void _loadFrames() {
-    _frames = List.generate(
-      7,
-          (index) => '${widget.characterFolder}/frame_${index + 1}.png',
-    );
-
-    for (var frame in _frames) {
-      precacheImage(AssetImage(frame), context);
-    }
-  }
-
-  @override
-  void dispose() {
-    _timer.cancel();
-    super.dispose();
-  }
+  const PreviewScreen({super.key, required this.item});
 
   @override
   Widget build(BuildContext context) {
+    const infoFontSize = 18.0;
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage(AppConstants.backgroundHomePath),
-            fit: BoxFit.cover,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: Text(
+          '${item.name} 미리보기',
+          style: const TextStyle(
+            fontFamily: 'GowunBatang',
+            fontSize: 22,
+            color: Colors.black,
           ),
         ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              // 상단 텍스트
-              Positioned(
-                top: 16,
-                left: 16,
-                right: 16,
-                child: Text(
-                  '${widget.itemName} 미리보기',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
+      body: Stack(
+        children: [
+          // 배경
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/fiting_room.png',
+              fit: BoxFit.cover,
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                children: [
+                  const Spacer(), // 위쪽 공간
+                  // 캐릭터
+                  Expanded(
+                    flex: 4,
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Image.network(
+                        item.assetUrl ?? item.imageUrl,
+                        fit: BoxFit.contain,
+                        height: screenHeight * 0.4,
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 16),
+                  // 설명
+                  Text(
+                    item.description ?? '',
+                    style: const TextStyle(
+                      fontFamily: 'GowunBatang',
+                      fontSize: infoFontSize,
+                      color: Colors.black87,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: screenHeight * 0.05),
+                ],
               ),
-
-              // 캐릭터 애니메이션
-              Positioned(
-                bottom: 20, // 버튼 바로 위에 위치
-                left: 0,
-                right: 0,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: _frames.asMap().entries.map((entry) {
-                    int idx = entry.key;
-                    String img = entry.value;
-                    return Opacity(
-                      opacity: idx == _frameIndex ? 1.0 : 0.0,
-                      child: Image.asset(img, fit: BoxFit.contain),
-                    );
-                  }).toList(),
-                ),
-              ),
-
-              // 돌아가기 버튼
-              Positioned(
-                bottom: 16,
-                left: 16,
-                right: 16,
-                child: RoundedButton(
-                  text: '돌아가기',
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

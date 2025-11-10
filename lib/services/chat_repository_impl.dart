@@ -4,45 +4,20 @@ import 'package:connectbeat/models/chat_message.dart';
 import 'package:connectbeat/models/chat_room_event.dart';
 import 'package:connectbeat/services/chat_repository.dart';
 import 'package:connectbeat/services/chat_api_service.dart';
+import 'package:connectbeat/services/chat_socket_service.dart';
 import 'package:connectbeat/providers/session_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:connectbeat/services/chat_report_service.dart';
 
-/// WebSocket 인터페이스 (STOMP 사용)
 abstract class ChatSocketPort {
-  Future<void> connectBase({
-    required void Function(Map<String, dynamic>) onPersonalEvent,
-  });
-
-  Future<void> subscribeRoom({
-    required String chatSessionId,
-    required void Function(Map<String, dynamic>) onRoomEvent,
-  });
-
-  void sendMessage({
-    required String chatSessionId,
-    required String senderId,
-    required String content,
-  });
-
-  void sendInvite({
-    required String chatSessionId,
-    required String inviteeId,
-  });
-
-  void sendJoin({
-    required String chatSessionId,
-  });
-
-  void sendEndChat({
-    required String chatSessionId,
-  });
-
-  void sendCancel({
-    required String chatSessionId,
-  });
-
+  Future<void> connectBase({required void Function(Map<String, dynamic>) onPersonalEvent});
+  Future<void> subscribeRoom({required String chatSessionId, required void Function(Map<String, dynamic>) onRoomEvent});
+  void sendMessage({required String chatSessionId, required String senderId, required String content});
+  void sendInvite({required String chatSessionId, required String inviteeId});
+  void sendJoin({required String chatSessionId});
+  void sendEndChat({required String chatSessionId});
+  void sendCancel({required String chatSessionId});
   void disconnect();
 }
 
@@ -58,17 +33,13 @@ class ChatRepositoryImpl implements ChatRepository {
   final Set<String> _subscribedRooms = {};
   final List<ChatMessage> _messages = [];
 
-  ChatRepositoryImpl({
-    required this.api,
-    required this.socket,
-    required this.ref,
-  });
+  ChatRepositoryImpl({required this.api, required this.socket, required this.ref});
 
-  /// ✅ dispose 체크 헬퍼
   void _checkDisposed() {
     if (_isDisposed) throw StateError("ChatRepository is disposed");
   }
 
+  /// 세션 시작
   @override
   Future<ChatRoom> startSession() async {
     _checkDisposed();
@@ -78,7 +49,7 @@ class ChatRepositoryImpl implements ChatRepository {
     return room;
   }
 
-  /// ✅ STOMP 연결
+  /// WebSocket 기본 연결
   Future<void> connectBase() async {
     _checkDisposed();
     await socket.connectBase(
@@ -102,17 +73,10 @@ class ChatRepositoryImpl implements ChatRepository {
             case "INVITATION_REJECTED":
               final chatSessionId = event.payload['chatSessionId'] as String?;
               if (chatSessionId != null) {
-                debugPrint("🚫 초대 취소/거절됨 → ${event.eventType}");
-
-                // ✅ 구독만 제거
+                debugPrint("🚫 초대 취소/거절 → ${event.eventType}");
                 _subscribedRooms.remove(chatSessionId);
-                debugPrint("🚪 구독 제거만 수행 → $chatSessionId");
-
-                // ❌ 세션 초기화 제거
-                // ref.read(sessionControllerProvider.notifier).clearSession();
               }
               break;
-
           }
         } catch (e, st) {
           debugPrint("⚠️ onPersonalEvent 처리 실패: $e\n$st");
@@ -121,10 +85,11 @@ class ChatRepositoryImpl implements ChatRepository {
     );
   }
 
-  /// ✅ 채팅방 구독
+  /// 채팅방 구독
   Future<void> subscribeRoom({required String chatSessionId}) async {
     _checkDisposed();
     if (_subscribedRooms.contains(chatSessionId)) return;
+
     _subscribedRooms.add(chatSessionId);
     debugPrint("📡 방 구독 완료 → $chatSessionId");
 
@@ -138,7 +103,7 @@ class ChatRepositoryImpl implements ChatRepository {
             if (event.eventType == "CONVERSATION_ENDED") {
               _subscribedRooms.remove(chatSessionId);
               _messages.removeWhere((m) => m.chatSessionId == chatSessionId);
-              debugPrint("❌ 대화 종료됨 → $chatSessionId");
+              debugPrint("❌ 대화 종료 → $chatSessionId");
             }
           } else if (data.containsKey("senderId") && data.containsKey("content")) {
             final msg = ChatMessage.fromJson(data);
@@ -156,20 +121,15 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   bool isSubscribed(String chatSessionId) => _subscribedRooms.contains(chatSessionId);
-
+  @override
   Stream<ChatMessage> subscribeMessages(String chatSessionId) => _messageController.stream;
-
+  @override
   Stream<ChatRoomEvent> subscribeEvents(String chatSessionId) => _eventController.stream;
-
   Stream<ChatRoomEvent> get eventStream => _eventController.stream;
 
-  /// ✅ 메시지 전송
+  /// 메시지 전송
   @override
-  Future<void> sendMessage({
-    required String chatSessionId,
-    required String senderId,
-    required String content,
-  }) async {
+  Future<void> sendMessage({required String chatSessionId, required String senderId, required String content}) async {
     _checkDisposed();
     socket.sendMessage(chatSessionId: chatSessionId, senderId: senderId, content: content);
 
@@ -180,88 +140,54 @@ class ChatRepositoryImpl implements ChatRepository {
     }
   }
 
-  /// ✅ 초대 전송 (재초대 가능)
-  Future<void> sendInvite({
-    required String chatSessionId,
-    required String inviteeId,
-  }) async {
+  /// 초대 전송
+  Future<void> sendInvite({required String chatSessionId, required String inviteeId}) async {
     _checkDisposed();
     if (inviteeId.isEmpty || inviteeId == "unknown") return;
-
-    // 구독 여부 확인 후 없으면 구독
     if (!_subscribedRooms.contains(chatSessionId)) {
       await subscribeRoom(chatSessionId: chatSessionId);
     }
-
     socket.sendInvite(chatSessionId: chatSessionId, inviteeId: inviteeId);
     debugPrint("📨 초대 전송 → $chatSessionId to $inviteeId");
   }
 
-
-  /// ✅ 초대 취소
+  /// 초대 취소
   Future<void> sendCancel({required String chatSessionId}) async {
     _checkDisposed();
     debugPrint("🚫 [초대 취소 요청] → $chatSessionId");
     socket.sendCancel(chatSessionId: chatSessionId);
   }
 
-  /// ✅ 초대 대기 확인 (앱 재접속 시)
-  Future<Map<String, dynamic>?> checkPendingInvitation() async {
-    _checkDisposed();
-    try {
-      final result = await api.checkPendingInvitation();
-      if (result != null) {
-        debugPrint("📬 대기 중 초대 발견 → ${result['chatSessionId']}");
-      } else {
-        debugPrint("✅ 대기 중 초대 없음");
-      }
-      return result;
-    } catch (e) {
-      debugPrint("⚠️ checkPendingInvite 실패: $e");
-      return null;
-    }
-  }
-
-  /// ✅ 초대 수락 (참여 요청)
+  /// 초대 수락
   Future<void> sendJoin({required String chatSessionId}) async {
     _checkDisposed();
     socket.sendJoin(chatSessionId: chatSessionId);
   }
 
-  /// ✅ 채팅 종료
+  /// 채팅 종료
   @override
   Future<void> sendEndChat({required String chatSessionId}) async {
     _checkDisposed();
     socket.sendEndChat(chatSessionId: chatSessionId);
 
-    final event = ChatRoomEvent(
-      eventType: "CONVERSATION_ENDED",
-      payload: {"chatSessionId": chatSessionId},
-    );
+    final event = ChatRoomEvent(eventType: "CONVERSATION_ENDED", payload: {"chatSessionId": chatSessionId});
     _eventController.add(event);
 
     _subscribedRooms.remove(chatSessionId);
     _messages.removeWhere((m) => m.chatSessionId == chatSessionId);
   }
 
-  /// ✅ 세션 종료 + 리포트 생성
+  /// 세션 종료 + 리포트 생성
   @override
   Future<void> closeSession(String chatSessionId) async {
     _checkDisposed();
     try {
       await Future.delayed(const Duration(milliseconds: 500));
+      final report = await generateReportWithRetry(chatSessionId: chatSessionId);
+      if (report != null) debugPrint("✅ 리포트 생성 성공: ${report['reportId']}");
 
-      final report = await generateReportWithRetry(
-        chatSessionId: chatSessionId,
-        feedback: "이번 대화의 감정 분석 결과입니다.",
-      );
-
-      if (report != null) {
-        debugPrint("✅ 리포트 생성 성공: ${report['reportId']}");
-      }
-
-      await api.closeSession(chatSessionId);
-      debugPrint("🛑 세션 종료 완료 → $chatSessionId");
+      socket.sendEndChat(chatSessionId: chatSessionId);
+      debugPrint("📤 WebSocket → 대화 종료 요청 전송 ($chatSessionId)");
     } catch (e, st) {
       debugPrint("🚨 closeSession 오류: $e\n$st");
     } finally {
@@ -269,11 +195,10 @@ class ChatRepositoryImpl implements ChatRepository {
     }
   }
 
-  /// ✅ 리포트 재시도 조회
+  /// 리포트 재시도 조회
   @override
   Future<Map<String, dynamic>?> generateReportWithRetry({
     required String chatSessionId,
-    required String feedback,
     Duration interval = const Duration(seconds: 3),
     Duration timeout = const Duration(minutes: 1),
   }) async {
@@ -281,22 +206,37 @@ class ChatRepositoryImpl implements ChatRepository {
     final endTime = DateTime.now().add(timeout);
 
     while (DateTime.now().isBefore(endTime)) {
-      try {
-        final report = await ChatReportService.generateReport(chatSessionId);
-        if (report != null) return report;
-      } catch (_) {}
+      final report = await ChatReportService.getReportBySession(chatSessionId);
+      if (report != null) return report;
       await Future.delayed(interval);
     }
     return null;
   }
 
-  /// ✅ 연결 해제
+  /// 대기 중 초대 확인
+  @override
+  Future<Map<String, dynamic>?> checkPendingInvitation() async {
+    _checkDisposed();
+    try {
+      final pending = await api.checkPendingInvitation();
+      if (pending != null) {
+        debugPrint("📬 대기 중 초대 발견 → ${pending['chatSessionId']}");
+      } else {
+        debugPrint("✅ 대기 중 초대 없음");
+      }
+      return pending;
+    } catch (e) {
+      debugPrint("⚠️ checkPendingInvitation 실패: $e");
+      return null;
+    }
+  }
+
+  /// 연결 해제
   void disconnect() {
     if (_isDisposed) return;
     _isDisposed = true;
 
     socket.disconnect();
-
     if (!_messageController.isClosed) _messageController.close();
     if (!_eventController.isClosed) _eventController.close();
 

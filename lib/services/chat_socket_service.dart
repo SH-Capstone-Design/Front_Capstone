@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:stomp_dart_client/stomp.dart';
 import 'package:stomp_dart_client/stomp_config.dart';
-import 'package:stomp_dart_client/stomp_frame.dart';
 import 'package:connectbeat/services/chat_repository_impl.dart';
 
 class StompSocketService implements ChatSocketPort {
