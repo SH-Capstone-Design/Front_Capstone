@@ -1,88 +1,109 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:connectbeat/core/constants.dart';
 import '../widgets/rounded_button.dart';
 import '../services/auth_service.dart';
+import '../services/couple_service.dart';
 
-class CoupleManageScreen extends StatelessWidget {
+class CoupleManageScreen extends StatefulWidget {
   const CoupleManageScreen({super.key});
 
-  /// 내 커플 상태 조회
-  Future<Map<String, dynamic>> fetchCoupleStatus() async {
-    final url = Uri.parse('${dotenv.env['BASE_URL']}/couples/status');
-    final token = await AuthService.getToken();
+  @override
+  State<CoupleManageScreen> createState() => _CoupleManageScreenState();
+}
 
-    if (token == null) {
-      throw Exception("JWT 토큰이 없습니다. 로그인 후 다시 시도해주세요.");
-    }
+class _CoupleManageScreenState extends State<CoupleManageScreen> {
+  Map<String, dynamic>? myInfo;
+  Map<String, dynamic>? coupleInfo;
+  bool loading = true;
+  String linkedDate = '-';
+  String anniversaryDate = '-';
 
-    final response = await http.get(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json; charset=UTF-8',
-      },
-    );
+  @override
+  void initState() {
+    super.initState();
+    _fetchData();
+  }
 
-    if (response.statusCode == 200) {
-      return jsonDecode(utf8.decode(response.bodyBytes));
-    } else if (response.statusCode == 401) {
-      throw Exception("인증 실패. 로그인 후 다시 시도해주세요.");
-    } else {
-      throw Exception("커플 상태 조회 실패 (${response.statusCode})");
+  Future<void> _fetchData() async {
+    setState(() => loading = true);
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) throw Exception("로그인이 필요합니다.");
+
+      final myProfile = await AuthService.getUserProfile();
+      final coupleData = await CoupleService.fetchCoupleStatus();
+
+      if (coupleData == null) throw Exception("커플 정보 조회 실패");
+
+      final linkedAt = coupleData['linkedAt'] ?? '';
+      final anniversary = coupleData['anniversaryDate'] ?? '';
+
+      String linkedDateFormatted = '-';
+      String anniversaryDateFormatted = '-';
+
+      try {
+        if (linkedAt.isNotEmpty) {
+          linkedDateFormatted =
+              DateFormat('yyyy.MM.dd').format(DateTime.parse(linkedAt));
+        }
+      } catch (_) {}
+
+      try {
+        if (anniversary.isNotEmpty) {
+          anniversaryDateFormatted =
+              DateFormat('yyyy.MM.dd').format(DateTime.parse(anniversary));
+        }
+      } catch (_) {}
+
+      setState(() {
+        myInfo = myProfile != null
+            ? {
+          'nickname': myProfile.nickname ?? '-',
+          'profileImage': myProfile.profileImage,
+        }
+            : {'nickname': '-', 'profileImage': null};
+        coupleInfo = coupleData;
+        linkedDate = linkedDateFormatted;
+        anniversaryDate = anniversaryDateFormatted;
+        loading = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("데이터 로드 실패: $e")),
+        );
+        setState(() => loading = false);
+      }
     }
   }
 
-  /// 커플 해제 요청
-  Future<void> unlinkCouple(BuildContext context) async {
-    final url = Uri.parse('${dotenv.env['BASE_URL']}/couples/unlink');
-    final token = await AuthService.getToken();
+  Future<void> _unlinkCouple() async {
+    try {
+      final token = await AuthService.getToken();
+      if (token == null) return;
 
-    if (token == null) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              "로그인이 필요합니다.",
-              style: TextStyle(fontFamily: 'GowunBatang'),
-            ),
-          ),
-        );
+      final success = await CoupleService.unlinkCouple(token);
+      if (success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("커플이 해제되었습니다.")),
+          );
+          Navigator.pop(context);
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("커플 해제 실패")),
+          );
+        }
       }
-      return;
-    }
-
-    final response = await http.post(
-      url,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json; charset=UTF-8',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      if (context.mounted) {
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              "커플이 해제되었습니다.",
-              style: TextStyle(fontFamily: 'GowunBatang'),
-            ),
-          ),
-        );
-        Navigator.pop(context);
-      }
-    } else {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "커플 해제에 실패했습니다. (${response.statusCode})",
-              style: const TextStyle(fontFamily: 'GowunBatang'),
-            ),
-          ),
+          SnackBar(content: Text("커플 해제 실패: $e")),
         );
       }
     }
@@ -90,8 +111,13 @@ class CoupleManageScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const titleFontSize = 22.0;
     const infoFontSize = 18.0;
+
+    if (loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -99,13 +125,18 @@ class CoupleManageScreen extends StatelessWidget {
         title: const Text(
           '커플 관리',
           style: TextStyle(
-              fontFamily: 'GowunBatang', fontSize: titleFontSize, color: Colors.black),
+            fontFamily: 'GowunBatang',
+            fontSize: 22,
+            color: Colors.black,
+          ),
         ),
         backgroundColor: Colors.transparent,
-        foregroundColor: Colors.black,
         elevation: 0,
+        foregroundColor: Colors.black,
       ),
       body: Container(
+        width: double.infinity,
+        height: double.infinity,
         decoration: BoxDecoration(
           image: DecorationImage(
             image: AssetImage(AppConstants.backgroundPath),
@@ -113,60 +144,119 @@ class CoupleManageScreen extends StatelessWidget {
           ),
         ),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: FutureBuilder<Map<String, dynamic>>(
-              future: fetchCoupleStatus(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text(
-                      snapshot.error.toString(),
-                      style: const TextStyle(
-                        color: Colors.red,
-                        fontFamily: 'GowunBatang',
+          child: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  child: Column(
+                    children: [
+                      // 내 정보 & 연인 정보
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          // 나
+                          Column(
+                            children: [
+                              CircleAvatar(
+                                radius: 40,
+                                backgroundImage: myInfo?['profileImage'] != null
+                                    ? NetworkImage(myInfo!['profileImage'])
+                                    : null,
+                                child: myInfo?['profileImage'] == null
+                                    ? const Icon(Icons.person, size: 40)
+                                    : null,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                myInfo?['nickname'] ?? '-',
+                                style: const TextStyle(
+                                    fontFamily: 'GowunBatang',
+                                    fontSize: 16,
+                                    color: Colors.black),
+                              ),
+                            ],
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 12),
+                            child: Text("❤️", style: TextStyle(fontSize: 24)),
+                          ),
+                          // 연인
+                          Column(
+                            children: [
+                              CircleAvatar(
+                                radius: 40,
+                                backgroundImage:
+                                coupleInfo?['partnerProfileImage'] != null
+                                    ? NetworkImage(
+                                    coupleInfo!['partnerProfileImage'])
+                                    : null,
+                                child: coupleInfo?['partnerProfileImage'] == null
+                                    ? const Icon(Icons.person, size: 40)
+                                    : null,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                coupleInfo?['partnerNickname'] ?? '-',
+                                style: const TextStyle(
+                                    fontFamily: 'GowunBatang',
+                                    fontSize: 16,
+                                    color: Colors.black),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ),
-                  );
-                }
+                      const SizedBox(height: 32),
 
-                final data = snapshot.data!;
-                final status = data['status'] ?? 'NONE';
-                final partnerNickname = data['partnerNickname'] ?? '-';
+                      // 연애 시작일
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.cake, color: Color(0xFFEC9FFF)),
+                          const SizedBox(width: 6),
+                          Text(
+                            "연애 시작일: $anniversaryDate",
+                            style: const TextStyle(
+                                fontFamily: 'GowunBatang',
+                                fontSize: infoFontSize - 2,
+                                color: Colors.black),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 80),
-                    Text(
-                      '커플 상태: $status',
-                      style: const TextStyle(
-                        fontFamily: 'GowunBatang',
-                        fontSize: infoFontSize,
-                        fontWeight: FontWeight.w500,
+                      // 앱 연결일
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.link, color: Color(0xFFEC9FFF)),
+                          const SizedBox(width: 6),
+                          Text(
+                            "우리 앱과 만난지: $linkedDate",
+                            style: const TextStyle(
+                                fontFamily: 'GowunBatang',
+                                fontSize: infoFontSize - 2,
+                                color: Colors.black),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      '파트너: $partnerNickname',
-                      style: const TextStyle(
-                        fontFamily: 'GowunBatang',
-                        fontSize: infoFontSize - 2,
-                        color: Colors.black54,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    RoundedButton(
-                      text: '커플 해제',
-                      onPressed: () => unlinkCouple(context),
-                    ),
-                  ],
-                );
-              },
-            ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // 커플 해제 버튼 고정
+              Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: RoundedButton(
+                  text: '커플 해제',
+                  onPressed: _unlinkCouple,
+                ),
+              ),
+            ],
           ),
         ),
       ),

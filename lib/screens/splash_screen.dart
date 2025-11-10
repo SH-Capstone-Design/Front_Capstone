@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:connectbeat/services/couple_service.dart';
 import 'package:flutter/material.dart';
 import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/services/auth_service.dart';
@@ -41,8 +42,8 @@ class _SplashScreenState extends State<SplashScreen> {
     }
 
     // ✅ 커플 상태 확인
-    final couple = await AuthService.fetchCoupleStatus();
-    final status = couple?.status ?? '';
+    final couple = await CoupleService.fetchCoupleStatus();
+    final status = couple?["status"] ?? '';
     debugPrint("🔥 커플 상태: $status");
 
     if (status == "ACTIVE") {
