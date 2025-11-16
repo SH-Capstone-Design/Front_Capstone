@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:connectbeat/models/chat_room.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
@@ -63,4 +64,24 @@ class ChatApiService {
       throw Exception("대기 초대 확인 실패: ${res.statusCode}");
     }
   }
+
+  /// 🖼️ 이미지 업로드 (S3 업로드 후 URL 반환)
+  Future<String> uploadChatImage(File imageFile) async {
+    final headers = await _headers();
+    final url = Uri.parse("$_baseUrl/chat/upload-image");
+
+    final request = http.MultipartRequest('POST', url)
+      ..headers.addAll(headers)
+      ..files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+
+    final res = await request.send();
+    if (res.statusCode == 200) {
+      final responseBody = await res.stream.bytesToString();
+      final data = jsonDecode(responseBody);
+      return data['imageUrl'];
+    } else {
+      throw Exception("이미지 업로드 실패: ${res.statusCode}");
+    }
+  }
+
 }

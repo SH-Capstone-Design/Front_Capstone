@@ -1,10 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:connectbeat/models/chat_room.dart';
 import 'package:connectbeat/models/chat_message.dart';
 import 'package:connectbeat/models/chat_room_event.dart';
 import 'package:connectbeat/services/chat_repository.dart';
 import 'package:connectbeat/services/chat_api_service.dart';
-import 'package:connectbeat/services/chat_socket_service.dart';
 import 'package:connectbeat/providers/session_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
@@ -13,11 +13,13 @@ import 'package:connectbeat/services/chat_report_service.dart';
 abstract class ChatSocketPort {
   Future<void> connectBase({required void Function(Map<String, dynamic>) onPersonalEvent});
   Future<void> subscribeRoom({required String chatSessionId, required void Function(Map<String, dynamic>) onRoomEvent});
-  void sendMessage({required String chatSessionId, required String senderId, required String content});
+  void sendMessage({required String chatSessionId, required String senderId, required String content, required String messageType});
   void sendInvite({required String chatSessionId, required String inviteeId});
   void sendJoin({required String chatSessionId});
   void sendEndChat({required String chatSessionId});
   void sendCancel({required String chatSessionId});
+  void sendImageMessage({required String chatSessionId, required String senderId, required String imageUrl});
+  void sendEmoticonMessage({required String chatSessionId, required String senderId, required String emoticonUrl});
   void disconnect();
 }
 
@@ -33,11 +35,17 @@ class ChatRepositoryImpl implements ChatRepository {
   final Set<String> _subscribedRooms = {};
   final List<ChatMessage> _messages = [];
 
-  ChatRepositoryImpl({required this.api, required this.socket, required this.ref});
+  ChatRepositoryImpl({
+    required this.api,
+    required this.socket,
+    required this.ref,
+  });
 
   void _checkDisposed() {
     if (_isDisposed) throw StateError("ChatRepository is disposed");
   }
+
+  Stream<ChatRoomEvent> get eventStream => _eventController.stream;
 
   /// 세션 시작
   @override
@@ -68,7 +76,6 @@ class ChatRepositoryImpl implements ChatRepository {
                 ref.read(sessionControllerProvider.notifier).setSession(chatSessionId);
               }
               break;
-
             case "INVITATION_CANCELED":
             case "INVITATION_REJECTED":
               final chatSessionId = event.payload['chatSessionId'] as String?;
@@ -100,17 +107,29 @@ class ChatRepositoryImpl implements ChatRepository {
           if (data.containsKey("eventType")) {
             final event = ChatRoomEvent.fromJson(data);
             _eventController.add(event);
+
             if (event.eventType == "CONVERSATION_ENDED") {
               _subscribedRooms.remove(chatSessionId);
               _messages.removeWhere((m) => m.chatSessionId == chatSessionId);
               debugPrint("❌ 대화 종료 → $chatSessionId");
             }
           } else if (data.containsKey("senderId") && data.containsKey("content")) {
-            final msg = ChatMessage.fromJson(data);
+            // messageType에 따라 ChatMessage 생성
+            final typeStr = (data['messageType'] as String?)?.toUpperCase() ?? 'TEXT';
+            final msg = ChatMessage(
+              chatSessionId: data['chatSessionId'] as String,
+              senderId: data['senderId'] as String,
+              content: data['content'] as String,
+              type: typeStr,
+              nickname: data['NickName'] as String?,
+              profileImage: data['profileImage'] as String?,
+              sentAt: data['sentAt'] != null ? DateTime.parse(data['sentAt']) : null,
+            );
+
             if (!_messages.any((m) => m.senderId == msg.senderId && m.content == msg.content)) {
               _messages.add(msg);
               _messageController.add(msg);
-              debugPrint("💬 새 메시지 수신: ${msg.content}");
+              debugPrint("💬 새 메시지 수신 (${msg.type}): ${msg.content}");
             }
           }
         } catch (e, st) {
@@ -121,26 +140,74 @@ class ChatRepositoryImpl implements ChatRepository {
   }
 
   bool isSubscribed(String chatSessionId) => _subscribedRooms.contains(chatSessionId);
+
   @override
   Stream<ChatMessage> subscribeMessages(String chatSessionId) => _messageController.stream;
   @override
   Stream<ChatRoomEvent> subscribeEvents(String chatSessionId) => _eventController.stream;
-  Stream<ChatRoomEvent> get eventStream => _eventController.stream;
 
-  /// 메시지 전송
+  /// 일반 메시지 전송
   @override
-  Future<void> sendMessage({required String chatSessionId, required String senderId, required String content}) async {
+  Future<void> sendMessage({
+    required String chatSessionId,
+    required String senderId,
+    required String content,
+    String type = 'TEXT',
+  }) async {
     _checkDisposed();
-    socket.sendMessage(chatSessionId: chatSessionId, senderId: senderId, content: content);
+    socket.sendMessage(
+      chatSessionId: chatSessionId,
+      senderId: senderId,
+      content: content,
+      messageType: type.toUpperCase(),
+    );
 
     if (!_messages.any((m) => m.senderId == senderId && m.content == content)) {
-      final msg = ChatMessage(chatSessionId: chatSessionId, senderId: senderId, content: content);
+      final msg = ChatMessage(
+        chatSessionId: chatSessionId,
+        senderId: senderId,
+        content: content,
+        type: type.toUpperCase(),
+      );
       _messages.add(msg);
       _messageController.add(msg);
+      debugPrint("💬 메시지 전송 (${type.toUpperCase()}): $content");
     }
   }
 
-  /// 초대 전송
+  /// 이미지 메시지 전송
+  Future<void> sendImageMessage({
+    required String chatSessionId,
+    required String senderId,
+    required File imageFile,
+  }) async {
+    _checkDisposed();
+    final imageUrl = await api.uploadChatImage(imageFile);
+
+    await sendMessage(
+      chatSessionId: chatSessionId,
+      senderId: senderId,
+      content: imageUrl,
+      type: 'IMAGE',
+    );
+  }
+
+  /// 이모티콘 메시지 전송
+  Future<void> sendEmoticonMessage({
+    required String chatSessionId,
+    required String senderId,
+    required String emoticonUrl,
+  }) async {
+    _checkDisposed();
+    await sendMessage(
+      chatSessionId: chatSessionId,
+      senderId: senderId,
+      content: emoticonUrl,
+      type: 'EMOTICON',
+    );
+  }
+
+  /// 초대 관련
   Future<void> sendInvite({required String chatSessionId, required String inviteeId}) async {
     _checkDisposed();
     if (inviteeId.isEmpty || inviteeId == "unknown") return;
@@ -151,14 +218,11 @@ class ChatRepositoryImpl implements ChatRepository {
     debugPrint("📨 초대 전송 → $chatSessionId to $inviteeId");
   }
 
-  /// 초대 취소
   Future<void> sendCancel({required String chatSessionId}) async {
     _checkDisposed();
-    debugPrint("🚫 [초대 취소 요청] → $chatSessionId");
     socket.sendCancel(chatSessionId: chatSessionId);
   }
 
-  /// 초대 수락
   Future<void> sendJoin({required String chatSessionId}) async {
     _checkDisposed();
     socket.sendJoin(chatSessionId: chatSessionId);
@@ -172,7 +236,6 @@ class ChatRepositoryImpl implements ChatRepository {
 
     final event = ChatRoomEvent(eventType: "CONVERSATION_ENDED", payload: {"chatSessionId": chatSessionId});
     _eventController.add(event);
-
     _subscribedRooms.remove(chatSessionId);
     _messages.removeWhere((m) => m.chatSessionId == chatSessionId);
   }
@@ -242,7 +305,6 @@ class ChatRepositoryImpl implements ChatRepository {
 
     _subscribedRooms.clear();
     _messages.clear();
-
     debugPrint("🔌 WebSocket 및 Stream 닫힘");
   }
 }

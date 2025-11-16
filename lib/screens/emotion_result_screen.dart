@@ -196,7 +196,7 @@ class _EmotionResultScreenState extends State<EmotionResultScreen>
     final screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
+      extendBodyBehindAppBar: false,
       appBar: AppBar(
         automaticallyImplyLeading: true,
         title: const Text(

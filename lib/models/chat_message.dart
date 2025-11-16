@@ -2,41 +2,45 @@ import 'package:flutter/foundation.dart';
 
 @immutable
 class ChatMessage {
-  final String chatSessionId;  // 채팅방 ID
-  final String senderId;       // 보낸 사람 ID
-  final String content;        // 메시지 내용
-  final String? senderName;    // 보낸 사람 닉네임
-  final String? senderProfileUrl; // 프로필 이미지 URL
-  final DateTime? sentTime;      // 전송 시간 (HH:mm 같은 문자열)
+  final String chatSessionId;
+  final String senderId;
+  final String content;
+  final String type;
+  final String? nickname;
+  final String? profileImage;
+  final DateTime? sentAt;
 
-  const ChatMessage({
+  ChatMessage({
     required this.chatSessionId,
     required this.senderId,
     required this.content,
-    this.senderName,
-    this.senderProfileUrl,
-    this.sentTime,
+    required this.type,
+    this.nickname,
+    this.profileImage,
+    this.sentAt,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
     return ChatMessage(
-      chatSessionId: json['chatSessionId'] as String,
-      senderId: json['senderId'] as String,
-      content: json['content'] as String,
-      senderName: json['senderName'] as String?,
-      senderProfileUrl: json['senderProfileUrl'] as String?,
-      sentTime: json['sentTime'] != null
-          ? DateTime.parse(json['sentTime'])
-          : null,
+      chatSessionId: json['chatSessionId'] ?? '',
+      senderId: json['senderId'] ?? '',
+      content: json['content'] ?? '',
+      type: json['messageType'] ?? json['type'] ?? 'TEXT', // ✅ 여기 핵심
+      nickname: json['nickname'],
+      profileImage: json['profileImage'],
+      sentAt: json['sentAt'] != null ? DateTime.parse(json['sentAt']) : null,
     );
   }
 
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'chatSessionId': chatSessionId,
-    'senderId': senderId,
-    'content': content,
-    'senderName': senderName,
-    'senderProfileUrl': senderProfileUrl,
-    'sentTime': sentTime,
-  };
+  Map<String, dynamic> toJson() {
+    return {
+      'chatSessionId': chatSessionId,
+      'senderId': senderId,
+      'content': content,
+      'messageType': type,
+      'nickname': nickname,
+      'profileImage': profileImage,
+      'sentAt': sentAt?.toIso8601String(),
+    };
+  }
 }

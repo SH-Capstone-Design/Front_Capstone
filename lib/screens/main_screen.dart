@@ -54,7 +54,7 @@ class MainScreen extends StatelessWidget {
                       '하루 10분, 연인과 대화를 통해',
                       style: TextStyle(
                         fontFamily: 'GowunBatang',
-                        fontSize: titleFontSize,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: Colors.black87,
                       ),
@@ -64,7 +64,7 @@ class MainScreen extends StatelessWidget {
                       '오늘 하루 감정을 알아보다.',
                       style: TextStyle(
                         fontFamily: 'GowunBatang',
-                        fontSize: titleFontSize,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: Colors.black87,
                       ),
