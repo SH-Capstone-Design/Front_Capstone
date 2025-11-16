@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:connectbeat/screens/chat_report_list_screen.dart';
+import 'package:connectbeat/screens/chathistory_screen.dart';
 import 'package:connectbeat/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -161,21 +163,36 @@ class _ChatReportDetailScreenState extends State<ChatReportDetailScreen>
         return;
       }
 
-      emotionSpots = {};
-      for (var emotion in colorsEmotions) {
-        emotionSpots[emotion] = [FlSpot(0, 0.0)];
-      }
+      // -----------------------------
+      // ✅ 모든 분에 대해 FlSpot 채우기
+      // -----------------------------
+      int maxMinute = points.isNotEmpty
+          ? points
+          .map((p) => (p['minute'] ?? 0) as int)
+          .reduce((a, b) => a > b ? a : b)
+          : 10;
 
+      Map<int, Map<String, double>> minuteScores = {};
       for (var point in points) {
-        final minute = ((point['minute'] ?? 0) + 1).toDouble();
+        final int minute = (point['minute'] ?? 0) as int;
         final avgScoresRaw = point['avgScores'] ?? '{}';
         final Map<String, dynamic> avgScores = avgScoresRaw is String
             ? json.decode(avgScoresRaw)
             : avgScoresRaw as Map<String, dynamic>;
 
+        minuteScores[minute] = {};
         for (var emotion in colorsEmotions) {
-          final score = (avgScores[emotionMapBack[emotion]] ?? 0.0).toDouble();
-          emotionSpots[emotion]!.add(FlSpot(minute, score));
+          minuteScores[minute]![emotion] =
+              (avgScores[emotionMapBack[emotion]] ?? 0.0).toDouble();
+        }
+      }
+
+      emotionSpots = {};
+      for (var emotion in colorsEmotions) {
+        emotionSpots[emotion] = [];
+        for (int m = 0; m <= maxMinute; m++) {
+          final score = minuteScores[m]?[emotion] ?? 0.0;
+          emotionSpots[emotion]!.add(FlSpot((m + 1).toDouble(), score)); // 0분 -> 1분
         }
       }
 
@@ -197,6 +214,12 @@ class _ChatReportDetailScreenState extends State<ChatReportDetailScreen>
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         automaticallyImplyLeading: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () {
+            Navigator.pop(context); // 이전 화면으로 돌아가기
+          },
+        ),
         title: const Text(
           "감정 리포트 상세",
           style: TextStyle(
@@ -216,30 +239,10 @@ class _ChatReportDetailScreenState extends State<ChatReportDetailScreen>
           indicatorColor: const Color(0xFFFDAAFF),
           indicatorWeight: 3,
           tabs: const [
-            Tab(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text('분당 분석'),
-              ),
-            ),
-            Tab(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text('종합 분석'),
-              ),
-            ),
-            Tab(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text('사용자별 분석'),
-              ),
-            ),
-            Tab(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text('피드백'),
-              ),
-            ),
+            Tab(child: FittedBox(fit: BoxFit.scaleDown, child: Text('분당 분석'))),
+            Tab(child: FittedBox(fit: BoxFit.scaleDown, child: Text('종합 분석'))),
+            Tab(child: FittedBox(fit: BoxFit.scaleDown, child: Text('사용자별 분석'))),
+            Tab(child: FittedBox(fit: BoxFit.scaleDown, child: Text('피드백'))),
           ],
         ),
       ),
@@ -446,6 +449,8 @@ class _ChatReportDetailScreenState extends State<ChatReportDetailScreen>
     );
   }
 
+  DateTime? _lastTapTime;
+
   Widget _buildLineChartSection(double screenHeight) {
     return Container(
       key: _sectionMinuteAnalysis,
@@ -462,6 +467,19 @@ class _ChatReportDetailScreenState extends State<ChatReportDetailScreen>
                 fontWeight: FontWeight.bold,
                 fontFamily: 'GowunBatang',
                 color: Colors.black87,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          // 안내 문구
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8.0),
+            child: Text(
+              "그래프를 더블클릭하면 해당 분의 대화를 확인할 수 있습니다.",
+              style: TextStyle(
+                fontSize: 12,
+                fontFamily: 'GowunBatang',
+                color: Colors.black54,
               ),
             ),
           ),
@@ -502,11 +520,14 @@ class _ChatReportDetailScreenState extends State<ChatReportDetailScreen>
                           getTitlesWidget: (value, meta) {
                             return Padding(
                               padding: const EdgeInsets.only(top: 4.0),
-                              child: Text("${value.toInt()}분",
-                                  style: const TextStyle(
-                                      fontSize: 10,
-                                      fontFamily: 'GowunBatang',
-                                      color: Colors.black)),
+                              child: Text(
+                                "${value.toInt()}분",
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontFamily: 'GowunBatang',
+                                  color: Colors.black,
+                                ),
+                              ),
                             );
                           },
                         ),
@@ -520,9 +541,10 @@ class _ChatReportDetailScreenState extends State<ChatReportDetailScreen>
                             return Text(
                               value.toStringAsFixed(1),
                               style: const TextStyle(
-                                  fontSize: 12,
-                                  fontFamily: 'GowunBatang',
-                                  color: Colors.black),
+                                fontSize: 12,
+                                fontFamily: 'GowunBatang',
+                                color: Colors.black,
+                              ),
                             );
                           },
                         ),
@@ -531,42 +553,77 @@ class _ChatReportDetailScreenState extends State<ChatReportDetailScreen>
                       topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
                     ),
                     borderData: FlBorderData(show: false),
+
                     lineTouchData: LineTouchData(
-                      enabled: true,
-                      handleBuiltInTouches: true,
-                      touchTooltipData: LineTouchTooltipData(
-                        tooltipRoundedRadius: 8,
-                        tooltipPadding: const EdgeInsets.all(8),
-                        tooltipBorder: BorderSide(color: Colors.white),
-                        fitInsideHorizontally: true,
-                        fitInsideVertically: true,
-                        getTooltipItems: (touchedSpots) {
-                          return touchedSpots.map((spot) {
-                            String emotionName = "";
-                            for (var i in selectedIndicesLine) {
-                              final emotion = colorsEmotions[i];
-                              if (emotionSpots[emotion]!.contains(spot)) {
-                                emotionName = emotion;
-                                break;
-                              }
+                    enabled: true,
+                    handleBuiltInTouches: true,
+                    touchTooltipData: LineTouchTooltipData(
+                      tooltipRoundedRadius: 8,
+                      tooltipPadding: const EdgeInsets.all(8),
+                      tooltipBorder: BorderSide(color: Colors.white),
+                      fitInsideHorizontally: true,
+                      fitInsideVertically: true,
+                      getTooltipItems: (touchedSpots) {
+                        return touchedSpots.map((spot) {
+                          String emotionName = "";
+                          for (var i in selectedIndicesLine) {
+                            final emotion = colorsEmotions[i];
+                            if (emotionSpots[emotion]!.contains(spot)) {
+                              emotionName = emotion;
+                              break;
                             }
-                            return LineTooltipItem(
-                              '${emotionMap[emotionName] ?? emotionName}\n 점수: ${spot.y.toStringAsFixed(2)}',
-                              const TextStyle(
-                                fontSize: 12,
-                                color: Colors.black,
-                                fontFamily: 'GowunBatang',
-                              ),
-                            );
-                          }).toList();
-                        },
-                        getTooltipColor: (touchedSpot) => Colors.white.withOpacity(0.9),
-                      ),
+                          }
+                          return LineTooltipItem(
+                            '${emotionMap[emotionName] ?? emotionName}\n 점수: ${spot.y.toStringAsFixed(2)}',
+                            const TextStyle(
+                              fontSize: 12,
+                              color: Colors.black,
+                              fontFamily: 'GowunBatang',
+                            ),
+                          );
+                        }).toList();
+                      },
+                      getTooltipColor: (touchedSpot) => Colors.white.withOpacity(0.9),
                     ),
+                    touchCallback: (FlTouchEvent event, LineTouchResponse? response) {
+                      if (event is FlTapUpEvent && response?.lineBarSpots != null) {
+                        final tappedSpot = response!.lineBarSpots!.first;
+                        final tappedMinute = tappedSpot.x.round();
+                        final now = DateTime.now();
+
+                        if (_lastTapTime != null &&
+                            now.difference(_lastTapTime!) < const Duration(milliseconds: 300)) {
+                          // 더블 탭 감지
+                          _lastTapTime = null; // 초기화
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ChatHistoryScreen(
+                                reportId: widget.reportId,
+                                minute: tappedMinute,
+                              ),
+                            ),
+                          );
+                        } else {
+                          // 첫 번째 탭 -> 시간 기록
+                          _lastTapTime = now;
+                        }
+                      }
+                    },
+                  ),
+
                     lineBarsData: selectedIndicesLine.map((index) {
                       final emotion = colorsEmotions[index];
-                      final data = emotionSpots[emotion] ?? [FlSpot(0, 0)];
-                      final color = colors[index % colors.length].withOpacity(0.9); // 연하게
+
+                      // ★ 여기서 emotionSpots 데이터를 복제해서 수정 가능하게 만듦
+                      List<FlSpot> data = List.from(emotionSpots[emotion] ?? []);
+
+                      // ★★ 바로 여기가 핵심! 0분 기준점 추가
+                      if (data.isEmpty || data.first.x != 0) {
+                        data.insert(0, FlSpot(0, 0));
+                      }
+
+                      final color = colors[index % colors.length].withOpacity(0.9);
 
                       return LineChartBarData(
                         spots: data,
@@ -587,6 +644,7 @@ class _ChatReportDetailScreenState extends State<ChatReportDetailScreen>
       ),
     );
   }
+
 
   Widget _buildBarChartSection(double screenHeight) {
     return Container(

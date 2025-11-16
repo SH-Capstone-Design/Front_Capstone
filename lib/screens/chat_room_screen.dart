@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:connectbeat/models/chat_room.dart';
 import 'package:connectbeat/models/chat_message.dart';
 import 'package:connectbeat/models/chat_room_event.dart';
@@ -49,6 +50,15 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   bool _chatStarted = false;
   bool _isWaitingDialogShown = false;
   bool _isManualClosing = false;
+  bool _showEmojiPicker = false;
+
+  static const double _messageInputBarHeight = 60.0;
+  static const double _emojiPickerHeight = 250.0;
+
+  double get _bottomInset {
+    // 이모티콘 열리면 높이만큼 패딩 추가, 키보드 올라오면 키보드 높이 반영
+    return (_showEmojiPicker ? _emojiPickerHeight : 0) + MediaQuery.of(context).viewInsets.bottom + _messageInputBarHeight;
+  }
 
   @override
   void initState() {
@@ -96,19 +106,16 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
             }
           }
           break;
-
         case "INVITATION":
           if (_isWaitingDialogShown) _dismissWaitingDialog();
           _showWaitingDialog();
           break;
-
         case "INVITATION_CANCELED":
           _dismissWaitingDialog();
           _addSystemMessage("🚫 상대방이 초대를 취소했습니다.");
           if (!mounted) return;
           Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
           break;
-
         case "CONVERSATION_STARTED":
           if (!_chatStarted) {
             _chatStarted = true;
@@ -116,12 +123,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
             _startTimer();
           }
           break;
-
         case "CONVERSATION_ENDED":
-        // 채팅 입력 막지 않고, 종료 리포트만 진행
           await _handleEndSession(isRemote: true);
           break;
-
         case "ERROR":
           final msg = event.payload?["message"] ?? "알 수 없는 오류";
           _addSystemMessage("⚠️ 오류: $msg");
@@ -176,11 +180,11 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
     if (!mounted) return;
 
-    // 리포트 조회 진행
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const ReportLoadingDialog(),
+      barrierColor: Colors.transparent,
+      builder: (_) => const ReportLoadingOverlay(),
     );
 
     try {
@@ -230,21 +234,60 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
       content: trimmed,
     );
 
-    setState(() => _messages.add(ChatMessage(
-      chatSessionId: widget.room.chatSessionId,
-      senderId: widget.currentUserId,
-      content: trimmed,
-    )));
+    setState(() {
+      _messages.add(ChatMessage(
+        chatSessionId: widget.room.chatSessionId,
+        senderId: widget.currentUserId,
+        content: trimmed,
+        type: "TEXT",
+        nickname: "나",
+        profileImage: null,
+        sentAt: DateTime.now(),
+      ));
+    });
+
     _scrollToBottom();
+  }
+
+  Future<void> _sendImageMessage(File imageFile) async {
+    try {
+      final repo = ref.read(chatRepositoryProvider);
+      await repo.sendImageMessage(
+        chatSessionId: widget.room.chatSessionId,
+        senderId: widget.currentUserId,
+        imageFile: imageFile,
+      );
+    } catch (e) {
+      debugPrint('⚠️ 이미지 메시지 전송 실패: $e');
+    }
+  }
+
+  Future<void> _sendEmoticonMessage(String emoticonUrl) async {
+    try {
+      final repo = ref.read(chatRepositoryProvider);
+      await repo.sendEmoticonMessage(
+        chatSessionId: widget.room.chatSessionId,
+        senderId: widget.currentUserId,
+        emoticonUrl: emoticonUrl,
+      );
+    } catch (e) {
+      debugPrint('⚠️ 이모티콘 메시지 전송 실패: $e');
+    }
   }
 
   void _addSystemMessage(String text) {
     if (_isDisposed) return;
-    setState(() => _messages.add(ChatMessage(
-      chatSessionId: widget.room.chatSessionId,
-      senderId: "system",
-      content: text,
-    )));
+    setState(() {
+      _messages.add(ChatMessage(
+        chatSessionId: widget.room.chatSessionId,
+        senderId: "system",
+        content: text,
+        type: "SYSTEM",
+        nickname: "system",
+        profileImage: null,
+        sentAt: DateTime.now(),
+      ));
+    });
     _scrollToBottom();
   }
 
@@ -275,7 +318,6 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   void dispose() {
     _isDisposed = true;
     _timer?.cancel();
-    _timer = null;
     _controller.dispose();
     _scrollController.dispose();
     _messageSub?.cancel();
@@ -292,27 +334,40 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final coupleAsync = ref.watch(coupleStatusProvider);
-
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage(AppConstants.backgroundPath),
-            fit: BoxFit.cover,
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildHeader(),
-              Expanded(child: _buildMessageList(coupleAsync)),
-              MessageInputBar(
-                onSend: _sendMessage,
-                enabled: _chatStarted && !_chatEnded,
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                _buildHeader(),
+                Expanded(
+                  child: AnimatedPadding(
+                    duration: const Duration(milliseconds: 250),
+                    padding: EdgeInsets.only(bottom: _bottomInset),
+                    child: _buildMessageList(ref.watch(coupleStatusProvider)),
+                  ),
+                ),
+              ],
+            ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: SafeArea(
+                top: false,
+                child: MessageInputBar(
+                  onSend: _sendMessage,
+                  onSendImage: _sendImageMessage,
+                  onSendEmoticon: _sendEmoticonMessage,
+                  showEmojiPicker: _showEmojiPicker,
+                  onEmojiPickerToggle: (visible) {
+                    setState(() => _showEmojiPicker = visible);
+                    if (visible) FocusScope.of(context).unfocus();
+                  },
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -330,9 +385,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                 context: context,
                 builder: (_) => EndChatDialog(chatSessionId: widget.room.chatSessionId),
               );
-              if (shouldEnd == true) {
-                await _handleEndSession(navigateToResult: true);
-              }
+              if (shouldEnd == true) await _handleEndSession(navigateToResult: true);
             },
             child: Container(
               padding: const EdgeInsets.all(6),
@@ -386,13 +439,15 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           itemCount: _messages.length,
           itemBuilder: (context, index) {
             final msg = _messages[index];
+            final previousMsg = index > 0 ? _messages[index - 1] : null;
             final isMe = msg.senderId == widget.currentUserId;
             final isSystem = msg.senderId == "system";
             final showProfile = index == 0 || _messages[index - 1].senderId != msg.senderId;
 
             if (isSystem) return _buildSystemMessage(msg);
 
-            return _buildChatMessage(msg, isMe, showProfile, partnerNickname, partnerProfile);
+            return _buildChatMessage(
+                msg, isMe, showProfile, partnerNickname, partnerProfile, previousMsg);
           },
         );
       },
@@ -427,7 +482,53 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     );
   }
 
-  Widget _buildChatMessage(ChatMessage msg, bool isMe, bool showProfile, String partnerNickname, String? partnerProfile) {
+  Widget _buildChatMessage(
+      ChatMessage msg,
+      bool isMe,
+      bool showProfile,
+      String partnerNickname,
+      String? partnerProfile,
+      ChatMessage? previousMsg,
+      ) {
+    final bool isMedia = msg.type == "IMAGE" || msg.type == "EMOTICON";
+
+    final int index = _messages.indexOf(msg);
+    ChatMessage? nextMsg = index < _messages.length - 1 ? _messages[index + 1] : null;
+
+    bool showTime = true;
+    if (nextMsg != null && msg.sentAt != null && nextMsg.sentAt != null) {
+      if (msg.sentAt!.hour == nextMsg.sentAt!.hour &&
+          msg.sentAt!.minute == nextMsg.sentAt!.minute) {
+        showTime = false;
+      }
+    }
+
+    if (isMedia && nextMsg != null) {
+      if (nextMsg.sentAt != null &&
+          msg.sentAt != null &&
+          msg.sentAt!.hour == nextMsg.sentAt!.hour &&
+          msg.sentAt!.minute == nextMsg.sentAt!.minute) {
+        showTime = false;
+      }
+    }
+
+    Widget contentWidget;
+    if (msg.type == "TEXT") {
+      contentWidget = Text(
+        msg.content,
+        style: TextStyle(color: isMe ? Colors.white : Colors.black87, fontSize: 16),
+      );
+    } else if (msg.type == "IMAGE") {
+      contentWidget = ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(msg.content, width: 120, height: 120, fit: BoxFit.cover),
+      );
+    } else if (msg.type == "EMOTICON") {
+      contentWidget = Image.network(msg.content, width: 90, height: 90, fit: BoxFit.contain);
+    } else {
+      contentWidget = Text(msg.content);
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -441,34 +542,33 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
               child: partnerProfile == null ? const Icon(Icons.person) : null,
             ),
             const SizedBox(width: 8),
-          ] else if (!isMe) const SizedBox(width: 40),
+          ] else if (!isMe)
+            const SizedBox(width: 40),
           Flexible(
             child: Column(
               crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
-                if (showProfile && !isMe)
-                  Text(
-                    partnerNickname,
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
+                if (!isMe && showProfile)
+                  Text(partnerNickname,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 Container(
                   margin: const EdgeInsets.only(top: 2),
-                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: isMe ? const Color(0xFFEC9FFF) : const Color(
-                        0xFFFFFFFF),
+                  padding: isMedia
+                      ? EdgeInsets.zero
+                      : const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                  decoration: isMedia
+                      ? null
+                      : BoxDecoration(
+                    color: isMe ? const Color(0xFFEC9FFF) : Colors.white,
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Text(
-                    msg.content,
-                    style: TextStyle(color: isMe ? Colors.white : Colors.black87),
-                  ),
+                  child: contentWidget,
                 ),
-                if (msg.sentTime != null)
+                if (showTime && msg.sentAt != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(
-                      "${msg.sentTime!.hour.toString().padLeft(2, '0')}:${msg.sentTime!.minute.toString().padLeft(2, '0')}",
+                      "${msg.sentAt!.hour.toString().padLeft(2, '0')}:${msg.sentAt!.minute.toString().padLeft(2, '0')}",
                       style: const TextStyle(fontSize: 11, color: Colors.black45),
                     ),
                   ),

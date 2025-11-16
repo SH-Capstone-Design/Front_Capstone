@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/intl.dart';
 import 'package:connectbeat/core/constants.dart';
 import '../widgets/rounded_button.dart';
@@ -65,6 +64,7 @@ class _CoupleManageScreenState extends State<CoupleManageScreen> {
           'profileImage': myProfile.profileImage,
         }
             : {'nickname': '-', 'profileImage': null};
+
         coupleInfo = coupleData;
         linkedDate = linkedDateFormatted;
         anniversaryDate = anniversaryDateFormatted;
@@ -80,25 +80,67 @@ class _CoupleManageScreenState extends State<CoupleManageScreen> {
     }
   }
 
+  /// ================================
+  /// 🔥 커플 해제
+  /// ================================
   Future<void> _unlinkCouple() async {
+    // 🔥 먼저 해제 여부 확인 다이얼로그
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Text(
+          "커플 해제",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          "두 분의 정보는 30일간 보관됩니다.\n정말 커플 연결을 해제하시겠습니까?",
+          style: TextStyle(fontSize: 15),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("취소"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("해제"),
+          ),
+        ],
+      ),
+    );
+
+    // 취소 → 중단
+    if (confirm != true) return;
+
     try {
       final token = await AuthService.getToken();
       if (token == null) return;
 
       final success = await CoupleService.unlinkCouple(token);
-      if (success) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("커플이 해제되었습니다.")),
-          );
-          Navigator.pop(context);
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("커플 해제 실패")),
-          );
-        }
+
+      if (success && mounted) {
+        // 🔥 해제 완료 알림
+        await showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text("커플 해제 완료"),
+            content: const Text("커플 연결이 해제되었습니다."),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("확인"),
+              ),
+            ],
+          ),
+        );
+
+        // 🔥 메인 화면으로 이동
+        Navigator.pushNamedAndRemoveUntil(context, '/main', (route) => false);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("커플 해제 실패")),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -148,11 +190,13 @@ class _CoupleManageScreenState extends State<CoupleManageScreen> {
             children: [
               Expanded(
                 child: SingleChildScrollView(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 16),
                   child: Column(
                     children: [
-                      // 내 정보 & 연인 정보
+                      /// ===============================
+                      /// 내 정보 & 연인 정보
+                      /// ===============================
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.center,
@@ -173,16 +217,19 @@ class _CoupleManageScreenState extends State<CoupleManageScreen> {
                               Text(
                                 myInfo?['nickname'] ?? '-',
                                 style: const TextStyle(
-                                    fontFamily: 'GowunBatang',
-                                    fontSize: 16,
-                                    color: Colors.black),
+                                  fontFamily: 'GowunBatang',
+                                  fontSize: 16,
+                                  color: Colors.black,
+                                ),
                               ),
                             ],
                           ),
+
                           const Padding(
                             padding: EdgeInsets.symmetric(horizontal: 12),
                             child: Text("❤️", style: TextStyle(fontSize: 24)),
                           ),
+
                           // 연인
                           Column(
                             children: [
@@ -190,10 +237,11 @@ class _CoupleManageScreenState extends State<CoupleManageScreen> {
                                 radius: 40,
                                 backgroundImage:
                                 coupleInfo?['partnerProfileImage'] != null
-                                    ? NetworkImage(
-                                    coupleInfo!['partnerProfileImage'])
+                                    ? NetworkImage(coupleInfo![
+                                'partnerProfileImage'])
                                     : null,
-                                child: coupleInfo?['partnerProfileImage'] == null
+                                child: coupleInfo?['partnerProfileImage'] ==
+                                    null
                                     ? const Icon(Icons.person, size: 40)
                                     : null,
                               ),
@@ -201,9 +249,10 @@ class _CoupleManageScreenState extends State<CoupleManageScreen> {
                               Text(
                                 coupleInfo?['partnerNickname'] ?? '-',
                                 style: const TextStyle(
-                                    fontFamily: 'GowunBatang',
-                                    fontSize: 16,
-                                    color: Colors.black),
+                                  fontFamily: 'GowunBatang',
+                                  fontSize: 16,
+                                  color: Colors.black,
+                                ),
                               ),
                             ],
                           ),
@@ -211,7 +260,7 @@ class _CoupleManageScreenState extends State<CoupleManageScreen> {
                       ),
                       const SizedBox(height: 32),
 
-                      // 연애 시작일
+                      /// 연애 시작일
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -220,15 +269,16 @@ class _CoupleManageScreenState extends State<CoupleManageScreen> {
                           Text(
                             "연애 시작일: $anniversaryDate",
                             style: const TextStyle(
-                                fontFamily: 'GowunBatang',
-                                fontSize: infoFontSize - 2,
-                                color: Colors.black),
+                              fontFamily: 'GowunBatang',
+                              fontSize: infoFontSize - 2,
+                              color: Colors.black,
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
 
-                      // 앱 연결일
+                      /// 앱 연결일
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -237,9 +287,10 @@ class _CoupleManageScreenState extends State<CoupleManageScreen> {
                           Text(
                             "우리 앱과 만난지: $linkedDate",
                             style: const TextStyle(
-                                fontFamily: 'GowunBatang',
-                                fontSize: infoFontSize - 2,
-                                color: Colors.black),
+                              fontFamily: 'GowunBatang',
+                              fontSize: infoFontSize - 2,
+                              color: Colors.black,
+                            ),
                           ),
                         ],
                       ),
@@ -248,7 +299,9 @@ class _CoupleManageScreenState extends State<CoupleManageScreen> {
                 ),
               ),
 
-              // 커플 해제 버튼 고정
+              /// ========================
+              /// 🔥 커플 해제 버튼
+              /// ========================
               Padding(
                 padding: const EdgeInsets.all(24.0),
                 child: RoundedButton(

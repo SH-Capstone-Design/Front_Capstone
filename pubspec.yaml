@@ -42,17 +42,12 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/images/atd/
     - .env
   fonts:
-    - family: GamjaFlower
-      fonts:
-        - asset: assets/fonts/GamjaFlower-Regular.ttf
     - family: GowunBatang
       fonts:
         - asset: assets/fonts/GowunBatang-Regular.ttf
-    - family: PoorStory
-      fonts:
-        - asset: assets/fonts/PoorStory-Regular.ttf
 
 flutter_launcher_icons:
   android: true

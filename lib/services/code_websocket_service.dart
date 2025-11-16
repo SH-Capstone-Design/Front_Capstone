@@ -1,9 +1,9 @@
+// services/code_websocket_service.dart
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:stomp_dart_client/stomp.dart';
 import 'package:stomp_dart_client/stomp_config.dart';
-import 'package:stomp_dart_client/stomp_frame.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:connectbeat/main.dart'; // 글로벌 navigatorKey, messengerKey
 
@@ -19,20 +19,16 @@ class CodeWebsocketService {
     _onCoupleConnected = callback;
   }
 
-  static Future<void> connect(
-      String userId,
-      String token, {
-        required VoidCallback onSubscribed,
-      }) async {
+  static Future<void> connect(String userId, String token) async {
     final wsUrl = dotenv.env['BASE_WS_URL'];
     if (wsUrl == null || wsUrl.isEmpty) {
       print("❌ BASE_WS_URL이 .env에 설정되지 않았습니다.");
       return;
     }
 
+    // 이미 연결되어 있다면 재연결하지 않음
     if (_stompClient?.isActive == true) {
       print("ℹ️ WebSocket is already active.");
-      onSubscribed();
       return;
     }
 
@@ -42,10 +38,12 @@ class CodeWebsocketService {
         onConnect: (frame) {
           print("✅ STOMP Connected");
 
+          // Heartbeat 로그
           _heartbeatLogger = Timer.periodic(const Duration(seconds: 10), (_) {
             print("💓 Heartbeat outgoing sent at ${DateTime.now()}");
           });
 
+          // 구독
           _stompClient?.subscribe(
             destination: "/user/queue/events",
             callback: (frame) {
@@ -54,23 +52,21 @@ class CodeWebsocketService {
               print("📩 Received event: $event");
 
               if (event['eventType'] == 'COUPLE_CONNECTED') {
-                // 🔹 등록된 콜백 호출
                 _onCoupleConnected?.call(event);
 
-                // 기존 글로벌 키 사용 예시
                 if (navigatorKey.currentState != null) {
                   navigatorKey.currentState!.pushReplacementNamed('/home');
                 }
                 if (messengerKey.currentState != null) {
                   messengerKey.currentState!.showSnackBar(
-                    SnackBar(content: Text(event['payload']?['message'] ?? '커플 연결 성공!')),
+                    SnackBar(
+                      content: Text(event['payload']?['message'] ?? '커플 연결 성공!'),
+                    ),
                   );
                 }
               }
             },
           );
-
-          onSubscribed();
         },
         onWebSocketError: (error) => disconnect(),
         onDisconnect: (frame) => _heartbeatLogger?.cancel(),

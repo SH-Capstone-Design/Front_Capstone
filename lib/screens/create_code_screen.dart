@@ -1,3 +1,4 @@
+// screens/create_code_screen.dart
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:connectbeat/services/code_websocket_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/main.dart';
+import '../widgets/rounded_button.dart';
 
 class CreateCodeScreen extends StatefulWidget {
   const CreateCodeScreen({super.key});
@@ -23,16 +25,18 @@ class _CreateCodeScreenState extends State<CreateCodeScreen> {
   @override
   void initState() {
     super.initState();
-    _initializeWebSocketAndFetchCode();
+
+    /// WebSocket 이벤트 리스너 등록
+    CodeWebsocketService.setOnCoupleConnected((event) {
+      final message = event['payload']?['message'] ?? '커플 연결 성공!';
+      messengerKey.currentState?.showSnackBar(SnackBar(content: Text(message)));
+    });
+
+    /// WebSocket 연결 + 코드 생성
+    _initialize();
   }
 
-  @override
-  void dispose() {
-    CodeWebsocketService.disconnect();
-    super.dispose();
-  }
-
-  Future<void> _initializeWebSocketAndFetchCode() async {
+  Future<void> _initialize() async {
     final token = await AuthService.getToken();
     final userId = await AuthService.getUserId();
 
@@ -44,26 +48,11 @@ class _CreateCodeScreenState extends State<CreateCodeScreen> {
       return;
     }
 
-    // 1️⃣ WebSocket 연결
-    await CodeWebsocketService.connect(
-      userId,
-      token,
-      onSubscribed: () {
-        print("📌 WebSocket 구독 완료, 이제 코드 생성 호출 가능");
+    // STOMP 연결
+    await CodeWebsocketService.connect(userId, token);
 
-        // 2️⃣ 커플 코드 생성
-        _fetchCoupleCode(token);
-
-        // 3️⃣ WebSocket 이벤트 수신 시 화면 전환 처리
-        CodeWebsocketService.setOnCoupleConnected((event) {
-          final message = event['payload']?['message'] ?? '커플 연결 성공!';
-          navigatorKey.currentState?.pushReplacementNamed('/home');
-          messengerKey.currentState?.showSnackBar(
-            SnackBar(content: Text(message)),
-          );
-        });
-      },
-    );
+    // 연결 후 코드 생성
+    await _fetchCoupleCode(token);
   }
 
   Future<void> _fetchCoupleCode(String token) async {
@@ -79,9 +68,6 @@ class _CreateCodeScreenState extends State<CreateCodeScreen> {
         },
         body: jsonEncode({}),
       );
-
-      print("🛠 Response status: ${response.statusCode}");
-      print("🛠 Response body: ${response.body}");
 
       if (response.statusCode == 200) {
         final decodedBody = utf8.decode(response.bodyBytes);
@@ -103,103 +89,166 @@ class _CreateCodeScreenState extends State<CreateCodeScreen> {
         _code = '에러 발생';
         _isLoading = false;
       });
-      print("❌ _fetchCoupleCode 에러: $e");
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final logoHeight = screenHeight * 0.2;
+    final size = MediaQuery.of(context).size;
+    final screenHeight = size.height;
+    final screenWidth = size.width;
 
     return Scaffold(
-      body: Stack(
-        children: [
-          SizedBox.expand(
-            child: Image.asset(
-              AppConstants.backgroundPath,
-              fit: BoxFit.cover,
-            ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFFE6F3), Color(0xFFFDE6FF)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
-          SafeArea(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.06),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  SizedBox(height: screenHeight * 0.03),
-                  SizedBox(
-                    height: logoHeight,
-                    child: Image.asset(
-                      AppConstants.logoPath,
-                      fit: BoxFit.contain,
-                    ),
+          image: DecorationImage(
+            image: AssetImage(AppConstants.backgroundPath),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              SizedBox(height: screenHeight * 0.05),
+              Image.asset(AppConstants.logoPath, height: screenHeight * 0.15),
+              SizedBox(height: screenHeight * 0.02),
+              Text(
+                '상대방과 연결을 위한 코드를 만들었어요',
+                style: TextStyle(
+                  fontFamily: 'GowunBatang',
+                  fontSize: screenHeight * 0.02,
+                  color: Colors.black87,
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.only(
+                    top: screenHeight * 0.02, bottom: screenHeight * 0.03),
+                child: Image.asset(
+                  "assets/images/hello.png",
+                  width: screenWidth * 0.4,
+                  height: screenHeight * 0.2,
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.1),
+                child: Text(
+                  '아래의 코드를 상대방에게 전달하면,\n두 사람이 연결됩니다.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'GowunBatang',
+                    fontSize: screenHeight * 0.018,
+                    color: Colors.black54,
                   ),
-                  const Spacer(flex: 2),
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: screenWidth * 0.06,
-                      vertical: screenHeight * 0.02,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFDEEFF),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Center(
-                      child: _isLoading
-                          ? const CircularProgressIndicator()
-                          : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '코드 : $_code',
-                            style: TextStyle(
-                              fontFamily: 'GowunBatang',
-                              fontSize: screenHeight * 0.025,
-                              fontWeight: FontWeight.w500,
-                            ),
+                ),
+              ),
+              const Spacer(),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.1),
+                child: Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.symmetric(vertical: screenHeight * 0.03),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFDEEFF),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.pinkAccent.withOpacity(0.2),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: _isLoading
+                        ? const CircularProgressIndicator()
+                        : Column(
+                      children: [
+                        Text(
+                          '초대 코드',
+                          style: TextStyle(
+                            fontFamily: 'GowunBatang',
+                            fontSize: screenHeight * 0.022,
+                            color: Colors.black54,
                           ),
-                          SizedBox(width: screenWidth * 0.02),
-                          GestureDetector(
-                            onTap: () {
-                              if (_code != null) {
-                                Clipboard.setData(
-                                    ClipboardData(text: _code!));
-                                ScaffoldMessenger.of(context)
-                                    .showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      '코드가 복사되었습니다!',
-                                      style: TextStyle(
-                                        fontFamily: 'GowunBatang',
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }
-                            },
-                            child: Text(
-                              '복사',
+                        ),
+                        SizedBox(height: screenHeight * 0.015),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _code ?? '생성 중...',
                               style: TextStyle(
                                 fontFamily: 'GowunBatang',
-                                fontSize: screenHeight * 0.022,
-                                color: Colors.blueAccent,
+                                fontSize: screenHeight * 0.03,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                          ),
-                        ],
-                      ),
+                            SizedBox(width: screenWidth * 0.03),
+                            GestureDetector(
+                              onTap: () {
+                                if (_code != null) {
+                                  Clipboard.setData(
+                                      ClipboardData(text: _code!));
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        '코드가 복사되었습니다!',
+                                        style: TextStyle(
+                                          fontFamily: 'GowunBatang',
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                              child: Text(
+                                '복사',
+                                style: TextStyle(
+                                  fontFamily: 'GowunBatang',
+                                  fontSize: screenHeight * 0.022,
+                                  color: Colors.blueAccent,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  const Spacer(flex: 3),
-                ],
+                ),
               ),
-            ),
+              const Spacer(),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.08),
+                child: RoundedButton(
+                  text: '돌아가기',
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              SizedBox(height: screenHeight * 0.04),
+              Padding(
+                padding: EdgeInsets.only(bottom: screenHeight * 0.03),
+                child: Text(
+                  '당신의 코드로 사랑이 시작됩니다.',
+                  style: TextStyle(
+                    fontFamily: 'GowunBatang',
+                    fontSize: screenHeight * 0.017,
+                    color: Colors.black54,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
