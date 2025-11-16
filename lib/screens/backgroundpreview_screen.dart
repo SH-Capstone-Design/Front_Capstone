@@ -1,121 +1,148 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:connectbeat/widgets/rounded_button.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/coin_provider.dart';
+import '../providers/couple_date_provider.dart';
+import '../providers/user_provider.dart';
+import '../providers/couple_provider.dart';
+import '../models/store_models.dart';
 
-class BackgroundPreviewScreen extends StatefulWidget {
-  final String backgroundName;
-  final String backgroundImagePath;
+class BackgroundPreviewScreen extends ConsumerWidget {
+  final StoreItemDTO item; // DB에서 가져온 배경 아이템
 
-  const BackgroundPreviewScreen({
-    super.key,
-    required this.backgroundName,
-    required this.backgroundImagePath,
-  });
-
-  @override
-  State<BackgroundPreviewScreen> createState() => _BackgroundPreviewScreenState();
-}
-
-class _BackgroundPreviewScreenState extends State<BackgroundPreviewScreen> {
-  late Timer _handTimer;
-  int _handIndex = 0;
-
-  final List<String> _handFrames = List.generate(
-    7,
-        (index) => 'assets/images/characters/ch_0/frame_${index + 1}.png',
-  );
+  const BackgroundPreviewScreen({super.key, required this.item});
 
   @override
-  void initState() {
-    super.initState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userAsync = ref.watch(userProvider);
+    final coupleAsync = ref.watch(coupleStatusProvider);
+    final coupleDate = ref.watch(coupleDateProvider);
+    final coin = ref.watch(coinProvider);
 
-    // 캐릭터 프레임 미리 로딩
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      for (var frame in _handFrames) {
-        await precacheImage(AssetImage(frame), context);
-      }
+    final screenHeight = MediaQuery.of(context).size.height;
 
-      _handTimer = Timer.periodic(const Duration(milliseconds: 450), (_) {
-        if (!mounted) return;
-        setState(() {
-          _handIndex = (_handIndex + 1) % _handFrames.length;
-        });
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _handTimer.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage(widget.backgroundImagePath),
-            fit: BoxFit.cover,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.black,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          '${item.name} 미리보기',
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.black,
           ),
         ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              // 상단 텍스트
-              Positioned(
-                top: 16,
-                left: 16,
-                right: 16,
-                child: Text(
-                  '${widget.backgroundName} 미리보기',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
+        centerTitle: true,
+      ),
+      body: Stack(
+        children: [
+          // 배경 이미지
+          Positioned.fill(
+            child: Image.network(
+              item.assetUrl ?? item.imageUrl,
+              fit: BoxFit.cover,
+            ),
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const SizedBox(height: kToolbarHeight + 16),
+
+                  // 커플 & 유저 정보
+                  userAsync.when(
+                    data: (user) {
+                      return coupleAsync.when(
+                        data: (couple) {
+                          final partnerNickname = couple?['partnerNickname'] ?? '파트너 없음';
+                          final userNickname = user?['nickname'] ?? '닉네임 없음';
+                          String dDayText = '사귄 날짜를 설정해주세요';
+                          if (coupleDate != null) {
+                            final days = DateTime.now().difference(coupleDate).inDays + 1;
+                            dDayText = '우리가 만난지 $days일 🩷';
+                          }
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '$userNickname ❤️ $partnerNickname',
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                dDayText,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              // 코인 정보
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  Image.asset(
+                                    'assets/images/ConnectBeat_coin.png',
+                                    width: 30,
+                                    height: 30,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '$coin 개',
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          );
+                        },
+                        loading: () => const SizedBox(),
+                        error: (err, st) => const SizedBox(),
+                      );
+                    },
+                    loading: () => const SizedBox(),
+                    error: (err, st) => const SizedBox(),
                   ),
-                ),
-              ),
 
-              // 캐릭터 애니메이션 (하단)
-              Positioned(
-                bottom: 80, // 돌아가기 버튼 위쪽에 캐릭터 위치
-                left: 0,
-                right: 0,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: _handFrames.asMap().entries.map((entry) {
-                    int idx = entry.key;
-                    String img = entry.value;
-                    return Opacity(
-                      opacity: idx == _handIndex ? 1.0 : 0.0,
-                      child: Image.asset(
-                        img,
-                        fit: BoxFit.contain,
-                        width: MediaQuery.of(context).size.width * 0.8,
+                  const Spacer(),
+
+                  // 중앙 하단: 아이템 설명
+                  if (item.description != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Center(
+                        child: Text(
+                          item.description!,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: Colors.black87,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
-                    );
-                  }).toList(),
-                ),
+                    ),
+                ],
               ),
-
-              // 돌아가기 버튼
-              Positioned(
-                bottom: 16,
-                left: 16,
-                right: 16,
-                child: RoundedButton(
-                  text: '돌아가기',
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

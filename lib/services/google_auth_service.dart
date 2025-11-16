@@ -1,3 +1,4 @@
+import 'package:connectbeat/services/couple_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'dart:convert';
@@ -13,9 +14,9 @@ final AuthRepository _authRepository = AuthRepository();
 /// ✅ 구글 로그인 후 커플 상태 확인 및 화면 이동
 Future<void> _checkCoupleConnectionGoogle(
     BuildContext context, Map<String, dynamic> userInfo) async {
-  final coupleStatus = await AuthService.fetchCoupleStatus();
+  final coupleStatus = await CoupleService.fetchCoupleStatus();
 
-  if (coupleStatus != null && coupleStatus.status == "ACTIVE") {
+  if (coupleStatus != null && coupleStatus["status"] == "ACTIVE") {
     debugPrint('💞 커플 연결됨 → 홈으로 이동');
     Navigator.pushReplacementNamed(context, '/home');
   } else {

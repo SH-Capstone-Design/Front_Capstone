@@ -8,72 +8,103 @@ class CoupleCodeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final logoHeight = size.height * 0.2;
-    final topPadding = size.height * 0.02; // 상단 여백
-    final textSpacing = size.height * 0.02; // 로고와 텍스트 간격
-    final buttonSpacing = size.height * 0.02; // 버튼 간 간격
+    final screenHeight = size.height;
+    final screenWidth = size.width;
 
     return Scaffold(
       body: Container(
+        width: double.infinity,
+        height: double.infinity,
         decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFFE6F3), Color(0xFFFDE6FF)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
           image: DecorationImage(
             image: AssetImage(AppConstants.backgroundPath),
             fit: BoxFit.cover,
           ),
         ),
         child: SafeArea(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: size.width * 0.06),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(height: topPadding),
+          child: Column(
+            children: [
+              SizedBox(height: screenHeight * 0.05),
 
-                // 로고
-                SizedBox(
-                  height: logoHeight,
-                  child: Image.asset(
-                    AppConstants.logoPath,
-                    fit: BoxFit.contain,
+              // 💌 상단 로고 + 타이틀
+              Image.asset(
+                AppConstants.logoPath,
+                height: screenHeight * 0.15,
+              ),
+              SizedBox(height: screenHeight * 0.02),
+              Text(
+                '두 사람의 연결을 시작해볼까요?',
+                style: TextStyle(
+                  fontFamily: 'GowunBatang',
+                  fontSize: screenHeight * 0.025,
+                  color: Colors.black87,
+                ),
+              ),
+
+              SizedBox(height: screenHeight * 0.02),
+              // 💌 hello.png 이미지
+              Image.asset(
+                "assets/images/hello.png",
+                width: screenWidth * 0.4,
+                height: screenHeight * 0.2,
+                fit: BoxFit.contain,
+              ),
+              SizedBox(height: screenHeight * 0.02),
+
+              // 💬 안내 문구
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.1),
+                child: Text(
+                  '한 사람은 “코드 생성하기”를,\n다른 한 사람은 “코드 입력하기”를 눌러주세요!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'GowunBatang',
+                    fontSize: screenHeight * 0.018,
+                    color: Colors.black54,
                   ),
                 ),
+              ),
 
-                SizedBox(height: textSpacing),
+              Spacer(),
 
-                // 커플 연결 텍스트
-                const Center(
-                  child: Text(
-                    '커플 연결하기',
-                    style: TextStyle(
-                      fontFamily: 'GowunBatang',
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+              // 💕 버튼 영역
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.08),
+                child: Column(
+                  children: [
+                    RoundedButton(
+                      text: '커플 코드 생성하기',
+                      onPressed: () => Navigator.pushNamed(context, '/create-code'),
                     ),
+                    SizedBox(height: screenHeight * 0.02),
+                    RoundedButton(
+                      text: '커플 코드 입력하기',
+                      onPressed: () => Navigator.pushNamed(context, '/input-code'),
+                    ),
+                  ],
+                ),
+              ),
+
+              Spacer(),
+
+              // 💬 작은 문구
+              Padding(
+                padding: EdgeInsets.only(bottom: screenHeight * 0.03),
+                child: Text(
+                  '서로의 마음이 닿을 때, 앱을 이용할 수 있습니다. 💞',
+                  style: TextStyle(
+                    fontFamily: 'GowunBatang',
+                    fontSize: screenHeight * 0.016,
+                    color: Colors.black54,
                   ),
                 ),
-
-                // Spacer를 활용해 버튼 위치 조절
-                Spacer(flex: 2),
-
-                // 커플 코드 생성 버튼
-                RoundedButton(
-                  text: '커플 코드 생성하기',
-                  onPressed: () => Navigator.pushNamed(context, '/create-code'),
-                ),
-
-                SizedBox(height: buttonSpacing),
-
-                // 커플 코드 입력 버튼
-                RoundedButton(
-                  text: '커플 코드 입력하기',
-                  onPressed: () => Navigator.pushNamed(context, '/input-code'),
-                ),
-
-                // 남는 공간 채우기
-                Spacer(flex: 3),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

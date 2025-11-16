@@ -54,6 +54,7 @@ class AppRouter {
           builder: (_) => ChatReportListScreen(coupleId: coupleId),
         );
 
+    // 기존 switch 안에 추가
       case '/emotion-result':
         final args = settings.arguments;
         if (args is String) {

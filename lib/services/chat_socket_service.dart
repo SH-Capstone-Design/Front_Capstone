@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:stomp_dart_client/stomp.dart';
 import 'package:stomp_dart_client/stomp_config.dart';
-import 'package:stomp_dart_client/stomp_frame.dart';
 import 'package:connectbeat/services/chat_repository_impl.dart';
 
 class StompSocketService implements ChatSocketPort {
@@ -91,7 +90,9 @@ class StompSocketService implements ChatSocketPort {
         if (frame.body == null) return;
         try {
           final data = jsonDecode(frame.body!);
+          print("📩 수신 JSON: ${jsonEncode(data)}");
           onRoomEvent(data);
+          print("💬 새 메시지 수신 (${data['messageType'] ?? data['type']}): ${data['content']}");
         } catch (e) {
           print("⚠️ RoomEvent 파싱 실패: $e");
         }
@@ -102,8 +103,6 @@ class StompSocketService implements ChatSocketPort {
     if (printDebugLog) print("📡 방 구독 완료 → $destination");
   }
 
-
-  /// STOMP 연결만 해제, 구독 상태 유지
   void clearConnection() {
     if (_stompClient != null) {
       _stompClient!.deactivate();
@@ -112,17 +111,53 @@ class StompSocketService implements ChatSocketPort {
     }
   }
 
+  /// 🔹 일반 메시지 전송
   @override
   void sendMessage({
     required String chatSessionId,
     required String senderId,
     required String content,
+    String messageType = 'TEXT', // 기본값 추가
   }) {
     _send('/app/chat/message', {
       "chatSessionId": chatSessionId,
       "senderId": senderId,
       "content": content,
+      "messageType": messageType.toUpperCase(), // 서버가 null 오류 안 나도록
     });
+    if (printDebugLog) print("📤 [SEND] ($messageType) $content");
+  }
+
+  /// 🔹 이미지 메시지 전송
+  @override
+  void sendImageMessage({
+    required String chatSessionId,
+    required String senderId,
+    required String imageUrl,
+  }) {
+    sendMessage(
+      chatSessionId: chatSessionId,
+      senderId: senderId,
+      content: imageUrl,
+      messageType: 'IMAGE',
+    );
+    if (printDebugLog) print("🖼️ [IMAGE] $imageUrl");
+  }
+
+  /// 🔹 이모티콘 메시지 전송
+  @override
+  void sendEmoticonMessage({
+    required String chatSessionId,
+    required String senderId,
+    required String emoticonUrl,
+  }) {
+    sendMessage(
+      chatSessionId: chatSessionId,
+      senderId: senderId,
+      content: emoticonUrl,
+      messageType: 'EMOTICON',
+    );
+    if (printDebugLog) print("😊 [EMOTICON] $emoticonUrl");
   }
 
   @override
@@ -142,26 +177,25 @@ class StompSocketService implements ChatSocketPort {
     _send('/app/chat/join', {"chatSessionId": chatSessionId});
   }
 
-  void _send(String dest, Map<String, dynamic> data) {
-    if (!isConnected) {
-      print("⚠️ WebSocket 미연결, send() 스킵됨: $dest");
-      return;
-    }
-    _stompClient!.send(destination: dest, body: jsonEncode(data));
-  }
-
   @override
   void sendEndChat({required String chatSessionId}) {
     _send('/app/chat/end', {"chatSessionId": chatSessionId});
     if (printDebugLog) print("📤 [SEND] /app/chat/end → $chatSessionId");
-
-    _subscribedRooms.remove(chatSessionId); // 대화 종료 시 구독 제거
+    _subscribedRooms.remove(chatSessionId);
   }
 
   @override
   void sendCancel({required String chatSessionId}) {
     _send('/app/chat/cancel', {"chatSessionId": chatSessionId});
     if (printDebugLog) print("📤 [SEND] /app/chat/cancel → $chatSessionId");
+  }
+
+  void _send(String dest, Map<String, dynamic> data) {
+    if (!isConnected) {
+      print("⚠️ WebSocket 미연결, send() 스킵됨: $dest");
+      return;
+    }
+    _stompClient!.send(destination: dest, body: jsonEncode(data));
   }
 
   @override

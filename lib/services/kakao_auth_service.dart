@@ -1,3 +1,4 @@
+import 'package:connectbeat/services/couple_service.dart';
 import 'package:flutter/material.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:flutter/services.dart';
@@ -65,12 +66,29 @@ Future<Map<String, dynamic>?> _getUserInfo({
 
 /// ✅ 로그인 후 서버에서 커플 상태 확인 후 화면 이동
 Future<void> _checkCoupleConnection(
-    BuildContext context, Map<String, dynamic> userInfo) async {
-  final coupleStatus = await AuthService.fetchCoupleStatus();
+    BuildContext context,
+    Map<String, dynamic> userInfo,
+    ) async {
+  final coupleStatus = await CoupleService.fetchCoupleStatus();
 
-  if (coupleStatus != null && coupleStatus.status == "ACTIVE") {
+  if (coupleStatus != null && coupleStatus["status"] == "ACTIVE") {
     _logger.info('💞 커플 연결됨 → 홈으로 이동');
-    Navigator.pushReplacementNamed(context, '/home');
+
+    // 커플 정보 로그 확인용
+    _logger.info('내 ID: ${coupleStatus["myUserId"]}, '
+        '상대 ID: ${coupleStatus["partnerId"]}, '
+        '상대 닉네임: ${coupleStatus["partnerNickname"]}');
+
+    // ✅ 홈 화면으로 이동하면서 커플 정보 전달
+    Navigator.pushReplacementNamed(
+      context,
+      '/home',
+      arguments: {
+        "myUserId": coupleStatus["myUserId"],
+        "partnerId": coupleStatus["partnerId"],
+        "partnerNickname": coupleStatus["partnerNickname"],
+      },
+    );
   } else {
     _logger.info('🧍 연결 안 됨 → 프로필 설정 화면으로 이동');
     Navigator.pushReplacementNamed(
@@ -80,6 +98,7 @@ Future<void> _checkCoupleConnection(
     );
   }
 }
+
 
 /// ✅ 메인 카카오 로그인 함수
 Future<void> signInWithKakao(BuildContext context) async {

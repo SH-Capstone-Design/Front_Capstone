@@ -2,6 +2,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_cropper/image_cropper.dart';
 import '../providers/user_provider.dart';
 import '../widgets/rounded_button.dart';
 import '../core/constants.dart';
@@ -29,11 +30,38 @@ class _MyProfileSettingScreenState
     _latestProfileUrl = user?['profileImage'];
   }
 
+  /// ✅ 이미지 자르기 기능 추가
+  Future<File?> _cropImage(File imageFile) async {
+    final cropped = await ImageCropper().cropImage(
+      sourcePath: imageFile.path,
+      aspectRatioPresets: [
+        CropAspectRatioPreset.square, // 정사각형 (프로필용)
+      ],
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: '이미지 자르기',
+          toolbarColor: Colors.pinkAccent,
+          toolbarWidgetColor: Colors.white,
+          initAspectRatio: CropAspectRatioPreset.square,
+          lockAspectRatio: true,
+        ),
+        IOSUiSettings(
+          title: '이미지 자르기',
+          aspectRatioLockEnabled: true,
+        ),
+      ],
+    );
+    return cropped != null ? File(cropped.path) : null;
+  }
+
   /// 갤러리에서 이미지 선택
   Future<void> _pickImage() async {
     final file = await ref.read(userProvider.notifier).pickImageFromGallery();
     if (file != null) {
-      setState(() => _pickedImage = file);
+      final croppedFile = await _cropImage(file); // ✅ 선택 후 자르기
+      if (croppedFile != null) {
+        setState(() => _pickedImage = croppedFile);
+      }
     }
   }
 
@@ -52,8 +80,9 @@ class _MyProfileSettingScreenState
     try {
       // 1️⃣ 이미지 업로드
       if (_pickedImage != null) {
-        final imageUrl =
-        await ref.read(userProvider.notifier).uploadProfileImage(_pickedImage!);
+        final imageUrl = await ref
+            .read(userProvider.notifier)
+            .uploadProfileImage(_pickedImage!);
         setState(() {
           _latestProfileUrl = imageUrl;
           _pickedImage = null;

@@ -1,9 +1,11 @@
+import 'dart:convert';
+import 'package:connectbeat/services/auth_service.dart';
 import 'package:connectbeat/services/couple_service.dart';
+import 'package:connectbeat/widgets/rounded_button.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/services/chat_report_service.dart';
-import 'package:connectbeat/screens/chathistory_screen.dart';
 
 class EmotionResultScreen extends StatefulWidget {
   final String chatSessionId;
@@ -13,12 +15,30 @@ class EmotionResultScreen extends StatefulWidget {
   State<EmotionResultScreen> createState() => _EmotionResultScreenState();
 }
 
-class _EmotionResultScreenState extends State<EmotionResultScreen> {
+class _EmotionResultScreenState extends State<EmotionResultScreen>
+    with TickerProviderStateMixin {
   bool _loading = true;
   Map<String, dynamic>? _report;
   String? _error;
 
-  /// 🔹 감정 매핑 (영문 → 한글)
+  late TabController _tabController;
+  final ScrollController _scrollController = ScrollController();
+
+  String? myUserId;
+  String? partnerId;
+  String? partnerNickname;
+
+  final List<String> colorsEmotions = [
+    "Joy",
+    "Love",
+    "Sadness",
+    "Disappointment",
+    "Regret",
+    "Anger",
+    "Anxiety",
+    "Neutral"
+  ];
+
   final Map<String, String> emotionMap = {
     "Joy": "기쁨",
     "Love": "설렘",
@@ -30,82 +50,142 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
     "Neutral": "중립",
   };
 
-  final List<String> emotions = [
-    "기쁨",
-    "설렘",
-    "슬픔",
-    "실망",
-    "후회",
-    "짜증",
-    "불안",
-    "중립",
-  ];
+  final Map<String, String> emotionMapBack = {
+    "Joy": "기쁨",
+    "Love": "설렘",
+    "Sadness": "슬픔",
+    "Disappointment": "실망",
+    "Regret": "후회",
+    "Anger": "짜증",
+    "Anxiety": "불안",
+    "Neutral": "중립",
+  };
 
   final List<Color> colors = [
-    const Color(0xFFFFFC2A), // 기쁨
-    const Color(0xFFA6FF76), // 설렘
-    const Color(0xFF1F3580), // 슬픔
-    const Color(0xFF98FFF0), // 실망
-    const Color(0xFFFF6C6C), // 후회
-    const Color(0xFFFFA665), // 짜증
-    const Color(0xFFB56EFF), // 불안
-    const Color(0xFFAAAAAA), // 중립
+    const Color(0xFFFFFD93),
+    const Color(0xFFB9FF93),
+    const Color(0xFF8AA2FF),
+    const Color(0xFFF8ACDA),
+    const Color(0xFFFF8F8F),
+    const Color(0xFFFFBE90),
+    const Color(0xFFD0A4FD),
+    const Color(0xFFAAAAAA),
   ];
 
-  Set<String> _selectedEmotions = {}; // 멀티 선택
+  Set<int> selectedIndicesLine = {0};
+  Set<int> selectedIndicesBar = {0};
   Map<String, List<FlSpot>> emotionSpots = {};
+
+  final GlobalKey _sectionMinuteAnalysis = GlobalKey();
+  final GlobalKey _sectionRadarAnalysis = GlobalKey();
+  final GlobalKey _sectionUserCompare = GlobalKey();
+  final GlobalKey _sectionGPTFeedback = GlobalKey();
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(_onTabChanged);
+    _fetchCoupleStatus();
     _fetchReport();
+  }
+
+  @override
+  void dispose() {
+    _tabController.removeListener(_onTabChanged);
+    _tabController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onTabChanged() {
+    if (!_tabController.indexIsChanging) return;
+
+    final targetKey = [
+      _sectionMinuteAnalysis,
+      _sectionRadarAnalysis,
+      _sectionUserCompare,
+      _sectionGPTFeedback
+    ][_tabController.index];
+
+    Scrollable.ensureVisible(
+      targetKey.currentContext!,
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  Future<void> _fetchCoupleStatus() async {
+    try {
+      // JWT에서 내 userId 가져오기
+      final String? myId = await AuthService.getUserId();
+
+      // 커플 상태 API 호출
+      final Map<String, dynamic>? coupleStatus = await CoupleService.fetchCoupleStatus();
+
+      setState(() {
+        myUserId = myId ?? ""; // JWT에서 못 가져오면 빈 문자열
+        partnerId = coupleStatus?['partnerId'] ?? ""; // API에서 못 가져오면 빈 문자열
+        partnerNickname = coupleStatus?['partnerNickname'] ?? "";
+      });
+    } catch (e) {
+      debugPrint("❌ _fetchCoupleStatus 에러: $e");
+
+      setState(() {
+        myUserId = "";
+        partnerId = "";
+        partnerNickname = "";
+      });
+    }
   }
 
   Future<void> _fetchReport() async {
     setState(() => _loading = true);
-
     try {
-      final report = await ChatReportService.generateReport(widget.chatSessionId);
-
+      final report =
+      await ChatReportService.getReportBySession(widget.chatSessionId);
       if (report == null) {
+        setState(() => _error = "리포트를 불러오지 못했습니다.");
+        return;
+      }
+
+      final aggregatedTimeline = report['aggregatedTimeline'];
+      final points = aggregatedTimeline != null &&
+          aggregatedTimeline['points'] is List
+          ? aggregatedTimeline['points'] as List
+          : [];
+
+      if (points.isEmpty) {
         setState(() {
-          _error = "리포트를 불러오지 못했습니다.";
+          _error = "분 단위 감정 데이터가 없습니다.";
+          _report = report;
         });
         return;
       }
 
-      // 🔹 감정 데이터 매핑 및 그래프용 변환
-      final timeline = report['aggregatedTimeline'] ?? {};
-      final points = (timeline['points'] ?? []) as List;
-
-      points.sort((a, b) {
-        final minA = (a['minute'] ?? 0) as num;
-        final minB = (b['minute'] ?? 0) as num;
-        return minA.compareTo(minB);
-      });
-
       emotionSpots = {};
-      for (var point in points) {
-        final minute = (point['minute'] ?? 0).toDouble();
-        final avgScores = Map<String, dynamic>.from(point['avgScores'] ?? {});
+      for (var emotion in colorsEmotions) {
+        emotionSpots[emotion] = [FlSpot(0, 0.0)];
+      }
 
-        avgScores.forEach((engEmotion, score) {
-          final krEmotion = emotionMap[engEmotion] ?? engEmotion;
-          emotionSpots.putIfAbsent(krEmotion, () => []);
-          emotionSpots[krEmotion]!.add(FlSpot(minute, (score as num).toDouble()));
-        });
+      for (var point in points) {
+        final minute = ((point['minute'] ?? 0) + 1).toDouble();
+        final avgScoresRaw = point['avgScores'] ?? '{}';
+        final Map<String, dynamic> avgScores = avgScoresRaw is String
+            ? json.decode(avgScoresRaw)
+            : avgScoresRaw as Map<String, dynamic>;
+
+        for (var emotion in colorsEmotions) {
+          final score = (avgScores[emotionMapBack[emotion]] ?? 0.0).toDouble();
+          emotionSpots[emotion]!.add(FlSpot(minute, score));
+        }
       }
 
       setState(() {
         _report = report;
-        if (_selectedEmotions.isEmpty && emotions.isNotEmpty) {
-          _selectedEmotions.add(emotions[0]); // 기본 선택
-        }
       });
     } catch (e) {
-      setState(() {
-        _error = "리포트 로드 오류: $e";
-      });
+      setState(() => _error = "리포트 로드 오류: $e");
     } finally {
       setState(() => _loading = false);
     }
@@ -116,6 +196,35 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
     final screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
+      extendBodyBehindAppBar: false,
+      appBar: AppBar(
+        automaticallyImplyLeading: true,
+        title: const Text(
+          "감정 리포트 상세",
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+            fontFamily: 'GowunBatang',
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.black,
+        elevation: 0,
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: Colors.black,
+          unselectedLabelColor: Colors.black54,
+          indicatorColor: const Color(0xFFFDAAFF),
+          indicatorWeight: 3,
+          tabs: const [
+            Tab(text: '분당 분석'),
+            Tab(text: '종합 분석'),
+            Tab(text: '사용자별 분석'),
+            Tab(text: '피드백'),
+          ],
+        ),
+      ),
       body: Container(
         decoration: BoxDecoration(
           image: DecorationImage(
@@ -124,232 +233,548 @@ class _EmotionResultScreenState extends State<EmotionResultScreen> {
           ),
         ),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _loading
-                ? const Center(child: CircularProgressIndicator(color: Colors.black))
-                : _error != null
-                ? Center(
-              child: Text(
-                _error!,
-                style: const TextStyle(
-                  fontFamily: 'GowunBatang',
-                  fontSize: 16,
-                  color: Colors.black,
+          child: _loading
+              ? const Center(
+              child: CircularProgressIndicator(color: Colors.black))
+              : _error != null
+              ? Center(
+              child: Text(_error!,
+                  style: const TextStyle(
+                      fontFamily: 'GowunBatang',
+                      fontSize: 16,
+                      color: Colors.black)))
+              : SingleChildScrollView(
+            controller: _scrollController,
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16, vertical: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildLineChartSection(screenHeight),
+                const SizedBox(height: 30),
+                _buildBarChartSection(screenHeight),
+                const SizedBox(height: 30),
+                _buildUserComparisonSection(screenHeight),
+                const SizedBox(height: 30),
+                _buildFeedbackSection(),
+                const SizedBox(height: 40),
+                Center(
+                  child: RoundedButton(
+                    text: '홈으로 이동',
+                    onPressed: () {
+                      Navigator.pushNamedAndRemoveUntil(
+                        context,
+                        '/home',
+                            (route) => false,
+                      );
+                    },
+                  ),
                 ),
-              ),
-            )
-                : _buildReportContent(screenHeight),
+                const SizedBox(height: 60),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildReportContent(double screenHeight) {
-    // 🔹 maxX 계산
-    double maxX = emotionSpots.values
-        .expand((list) => list)
-        .fold<double>(0, (prev, spot) => spot.x > prev ? spot.x : prev);
+  Widget _buildUserComparisonSection(double screenHeight) {
+    final userScores =
+        _report?['overallScores']?['userAvgScores'] ?? {} as Map<String, dynamic>;
 
-    double bottomInterval = (maxX / 5).ceilToDouble();
-    bottomInterval = bottomInterval > 0 ? bottomInterval : 1;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        const SizedBox(height: 10),
-        const Text(
-          "감정 분석 리포트",
+    if (userScores.isEmpty || myUserId == null || partnerId == null) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16.0),
+        child: Text(
+          "사용자별 감정 데이터가 없습니다.",
           style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
+            fontSize: 14,
             fontFamily: 'GowunBatang',
             color: Colors.black87,
           ),
         ),
-        const SizedBox(height: 8),
+      );
+    }
 
-        // 🔹 감정 그래프
-        Container(
-          height: screenHeight * 0.35,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.85),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: LineChart(
-              LineChartData(
-                minY: 0,
-                maxY: 1,
-                minX: 0,
-                maxX: maxX,
-                gridData: FlGridData(show: true, drawVerticalLine: false),
-                titlesData: FlTitlesData(
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      interval: bottomInterval,
-                      getTitlesWidget: (value, meta) =>
-                          Text("${value.toInt()}분", style: const TextStyle(fontFamily: 'GowunBatang', color: Colors.black, fontSize: 10)),
-                    ),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      interval: 0.2,
-                      getTitlesWidget: (value, meta) =>
-                          Text(value.toStringAsFixed(1), style: const TextStyle(fontFamily: 'GowunBatang', color: Colors.black, fontSize: 10)),
-                    ),
-                  ),
-                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                ),
-                borderData: FlBorderData(show: false),
-                lineBarsData: emotionSpots.entries
-                    .where((e) => _selectedEmotions.contains(e.key))
-                    .map((e) {
-                  final idx = emotions.indexOf(e.key);
-                  return LineChartBarData(
-                    isCurved: true,
-                    barWidth: 2,
-                    spots: e.value,
-                    color: colors[idx % colors.length],
-                    dotData: FlDotData(show: true),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: colors[idx % colors.length].withOpacity(0.1),
-                    ),
-                  );
-                }).toList(),
+    final myScores = userScores["${myUserId}_avg_scores"] ?? {};
+    final partnerScores = userScores["${partnerId}_avg_scores"] ?? {};
+
+    return Container(
+      key: _sectionUserCompare,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8.0),
+            child: Text(
+              "사용자별 감정 비교",
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'GowunBatang',
+                color: Colors.black87,
               ),
             ),
           ),
-        ),
-
-        const SizedBox(height: 10),
-
-        // 🔹 감정 선택 버튼
-        Container(
-          height: 50,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: List.generate(emotions.length, (index) {
-                final emotion = emotions[index];
-                final isSelected = _selectedEmotions.contains(emotion);
-
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      if (isSelected) {
-                        _selectedEmotions.remove(emotion);
-                      } else {
-                        _selectedEmotions.add(emotion);
-                      }
-                    });
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    margin: const EdgeInsets.symmetric(horizontal: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? colors[index % colors.length].withOpacity(0.3)
-                          : Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      emotion,
-                      style: TextStyle(
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        color: isSelected ? Colors.black : Colors.black87,
-                        fontSize: 14,
-                        fontFamily: 'GowunBatang',
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 10),
-
-        // 🔹 피드백 + ChatReportListScreen 이동 버튼
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(16),
+          const SizedBox(height: 10),
+          Container(
+            // 높이 고정 제거하고 내부 Column이 필요한 만큼만 차지하도록
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.85),
               borderRadius: BorderRadius.circular(16),
             ),
+            padding: const EdgeInsets.all(12),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min, // 중요: Column이 content만큼만 차지
               children: [
-                const Text(
-                  "감정 분석에 대한 레포트",
-                  style: TextStyle(
-                    fontFamily: 'GowunBatang',
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
+                // 감정별 막대
+                ...colorsEmotions.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final emotion = entry.value;
+                  final myScore = (myScores[emotionMapBack[emotion]] ?? 0.0).toDouble();
+                  final partnerScore = (partnerScores[emotionMapBack[emotion]] ?? 0.0).toDouble();
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                    child: Row(
                       children: [
-                        Text(
-                          _report?['gptFeedback'] ?? '피드백 데이터가 없습니다.',
-                          style: const TextStyle(
-                            fontFamily: 'GowunBatang',
-                            fontSize: 16,
-                            color: Colors.black87,
-                            height: 1.5,
+                        // 나
+                        Expanded(
+                          flex: (myScore * 100).toInt().clamp(1, 100),
+                          child: Container(
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: colors[index % colors.length].withOpacity(0.9), // 위 차트 색상과 통일
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(12),
+                                bottomLeft: Radius.circular(12),
+                              ),
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () {
-                              Navigator.pushNamedAndRemoveUntil(
-                                context,
-                                '/home', // 메인 화면 라우트 이름
-                                    (route) => false, // 기존 스택 모두 제거
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFFFEEFF),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                        // 감정 이름
+                        Container(
+                          width: 80,
+                          alignment: Alignment.center,
+                          child: Text(
+                            emotionMap[emotion] ?? emotion,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontFamily: 'GowunBatang',
                             ),
-                            child: const Text(
-                              "메인으로 이동",
-                              style: TextStyle(
-                                fontFamily: 'GowunBatang',
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        // 상대
+                        Expanded(
+                          flex: (partnerScore * 100).toInt().clamp(1, 100),
+                          child: Container(
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: colors[index % colors.length].withOpacity(0.9), // 연하게 해서 구분
+                              borderRadius: const BorderRadius.only(
+                                topRight: Radius.circular(12),
+                                bottomRight: Radius.circular(12),
                               ),
                             ),
                           ),
                         ),
                       ],
                     ),
-                  ),
+                  );
+                }).toList(),
+
+                const SizedBox(height: 6), // 아래 레이블과 막대 간격
+                // 아래 레이블
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        "나",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, fontFamily: 'GowunBatang'),
+                      ),
+                    ),
+                    const SizedBox(width: 80), // 감정 이름 공간
+                    Expanded(
+                      child: Text(
+                        partnerNickname ?? "", // 커플 서비스에서 가져온 닉네임 사용
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontFamily: 'GowunBatang',
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeedbackSection() {
+    return Container(
+      key: _sectionGPTFeedback,
+      constraints: const BoxConstraints(minHeight: 400),
+      width: double.infinity,
+      decoration: BoxDecoration(
+        image: const DecorationImage(
+            image: AssetImage("assets/images/ConnectBeat_Note.png"), fit: BoxFit.cover),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      padding: const EdgeInsets.fromLTRB(45, 40, 45, 32),
+      child: Text(
+        _report?['gptFeedback'] ?? '피드백 데이터가 없습니다.',
+        style: const TextStyle(
+          fontSize: 16,
+          height: 1.6,
+          fontFamily: 'GowunBatang',
+          color: Colors.black87,
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _buildLineChartSection(double screenHeight) {
+    return Container(
+      key: _sectionMinuteAnalysis,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 12),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8.0),
+            child: Text(
+              "분당 감정 분석 결과",
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'GowunBatang',
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            height: screenHeight * 0.3,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 800),
+                child: LineChart(
+                  key: ValueKey(selectedIndicesLine),
+                  LineChartData(
+                    minX: 0,
+                    maxX: selectedIndicesLine.isNotEmpty
+                        ? selectedIndicesLine
+                        .map((i) => emotionSpots[colorsEmotions[i]]?.last.x ?? 0)
+                        .reduce((a, b) => a > b ? a : b)
+                        : 1.0,
+                    minY: 0,
+                    maxY: 1.0,
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: false,
+                      horizontalInterval: 0.2,
+                      getDrawingHorizontalLine: (v) =>
+                          FlLine(color: Colors.grey.withOpacity(0.2), strokeWidth: 1),
+                    ),
+                    titlesData: FlTitlesData(
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          interval: 1,
+                          getTitlesWidget: (value, meta) {
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 4.0),
+                              child: Text("${value.toInt()}분",
+                                  style: const TextStyle(
+                                      fontSize: 10,
+                                      fontFamily: 'GowunBatang',
+                                      color: Colors.black)),
+                            );
+                          },
+                        ),
+                      ),
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          interval: 0.2,
+                          reservedSize: 28,
+                          getTitlesWidget: (value, meta) {
+                            return Text(
+                              value.toStringAsFixed(1),
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  fontFamily: 'GowunBatang',
+                                  color: Colors.black),
+                            );
+                          },
+                        ),
+                      ),
+                      rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    ),
+                    borderData: FlBorderData(show: false),
+                    lineTouchData: LineTouchData(
+                      enabled: true,
+                      handleBuiltInTouches: true,
+                      touchTooltipData: LineTouchTooltipData(
+                        tooltipRoundedRadius: 8,
+                        tooltipPadding: const EdgeInsets.all(8),
+                        tooltipBorder: BorderSide(color: Colors.white),
+                        fitInsideHorizontally: true,
+                        fitInsideVertically: true,
+                        getTooltipItems: (touchedSpots) {
+                          return touchedSpots.map((spot) {
+                            String emotionName = "";
+                            for (var i in selectedIndicesLine) {
+                              final emotion = colorsEmotions[i];
+                              if (emotionSpots[emotion]!.contains(spot)) {
+                                emotionName = emotion;
+                                break;
+                              }
+                            }
+                            return LineTooltipItem(
+                              '${emotionMap[emotionName] ?? emotionName}\n 점수: ${spot.y.toStringAsFixed(2)}',
+                              const TextStyle(
+                                fontSize: 12,
+                                color: Colors.black,
+                                fontFamily: 'GowunBatang',
+                              ),
+                            );
+                          }).toList();
+                        },
+                        getTooltipColor: (touchedSpot) => Colors.white.withOpacity(0.9),
+                      ),
+                    ),
+                    lineBarsData: selectedIndicesLine.map((index) {
+                      final emotion = colorsEmotions[index];
+                      final data = emotionSpots[emotion] ?? [FlSpot(0, 0)];
+                      final color = colors[index % colors.length].withOpacity(0.9);
+
+                      return LineChartBarData(
+                        spots: data,
+                        isCurved: true,
+                        color: color,
+                        barWidth: 3,
+                        dotData: FlDotData(show: true),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildEmotionSelector(isLineChart: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBarChartSection(double screenHeight) {
+    return Container(
+      key: _sectionRadarAnalysis,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 12),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8.0),
+            child: Text(
+              "종합 감정 분석 결과",
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'GowunBatang',
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            height: screenHeight * 0.3,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 800),
+                child: BarChart(
+                  key: ValueKey(selectedIndicesBar),
+                  BarChartData(
+                    maxY: 1.0,
+                    barGroups: selectedIndicesBar.map((index) {
+                      final emotion = colorsEmotions[index];
+                      final score = (_report?['overallScores']?['avgScores']?[emotionMapBack[emotion]] ?? 0.0).toDouble();
+                      return BarChartGroupData(
+                        x: index,
+                        barRods: [
+                          BarChartRodData(
+                            toY: score,
+                            color: colors[index % colors.length].withOpacity(0.9),
+                            width: 22,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                    titlesData: FlTitlesData(
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          getTitlesWidget: (value, meta) {
+                            final emotion = colorsEmotions[value.toInt()];
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 4.0),
+                              child: Text(
+                                emotionMap[emotion] ?? emotion,
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontFamily: 'GowunBatang',
+                                    color: Colors.black),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    ),
+                    borderData: FlBorderData(show: false),
+                    gridData: FlGridData(show: false),
+                    barTouchData: BarTouchData(enabled: true),
+                  ),
+                  swapAnimationDuration: const Duration(milliseconds: 800),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildEmotionSelector(isLineChart: false),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmotionSelector({required bool isLineChart}) {
+    final selectedIndices = isLineChart ? selectedIndicesLine : selectedIndicesBar;
+
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    if (selectedIndices.length == colorsEmotions.length) {
+                      if (isLineChart) {
+                        selectedIndicesLine = {0};
+                      } else {
+                        selectedIndicesBar = {0};
+                      }
+                    } else {
+                      if (isLineChart) {
+                        selectedIndicesLine = Set<int>.from(List.generate(colorsEmotions.length, (i) => i));
+                      } else {
+                        selectedIndicesBar = Set<int>.from(List.generate(colorsEmotions.length, (i) => i));
+                      }
+                    }
+                  });
+                },
+                child: Container(
+                  width: 70,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: selectedIndices.length == colorsEmotions.length
+                        ? Colors.grey.withOpacity(0.3)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    "전체",
+                    style: TextStyle(
+                      fontWeight: selectedIndices.length == colorsEmotions.length
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                      color: Colors.black,
+                      fontSize: 14,
+                      fontFamily: 'GowunBatang',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            ...List.generate(colorsEmotions.length, (index) {
+              final isSelected = selectedIndices.contains(index);
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      if (isLineChart) {
+                        if (isSelected) {
+                          selectedIndicesLine.remove(index);
+                          if (selectedIndicesLine.isEmpty) selectedIndicesLine.add(index);
+                        } else {
+                          selectedIndicesLine.add(index);
+                        }
+                      } else {
+                        if (isSelected) {
+                          selectedIndicesBar.remove(index);
+                          if (selectedIndicesBar.isEmpty) selectedIndicesBar.add(index);
+                        } else {
+                          selectedIndicesBar.add(index);
+                        }
+                      }
+                    });
+                  },
+                  child: Container(
+                    width: 70,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: isSelected ? colors[index].withOpacity(0.2) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      emotionMap[colorsEmotions[index]] ?? colorsEmotions[index],
+                      style: TextStyle(
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        color: Colors.black,
+                        fontSize: 14,
+                        fontFamily: 'GowunBatang',
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
     );
   }
 }

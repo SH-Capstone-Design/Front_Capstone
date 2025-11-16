@@ -6,14 +6,26 @@ class MessageBubble extends StatelessWidget {
     super.key,
     required this.message,
     required this.isMine,
-    this.showTime = true,
-    this.showProfile = true, // 연속 메시지 시 false로 처리 가능
+    this.nextMessage, // 바로 아래 메시지 (시간 비교용)
+    this.showProfile = true,
   });
 
   final ChatMessage message;
+  final ChatMessage? nextMessage;
   final bool isMine;
-  final bool showTime;
   final bool showProfile;
+
+  bool get _shouldShowTime {
+    if (nextMessage == null) return true; // 마지막 메시지는 항상 시간 표시
+    if (message.sentAt == null || nextMessage!.sentAt == null) return true;
+
+    // 같은 사람 & 같은 시/분이면 시간 숨김
+    final sameSender = message.senderId == nextMessage!.senderId;
+    final sameMinute =
+        message.sentAt!.hour == nextMessage!.sentAt!.hour &&
+            message.sentAt!.minute == nextMessage!.sentAt!.minute;
+    return !(sameSender && sameMinute);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,12 +35,13 @@ class MessageBubble extends StatelessWidget {
         ? Colors.black.withOpacity(0.3)
         : (isMine ? Colors.pinkAccent : const Color(0xFFFFDEFF));
 
-    final textColor = isSystem
-        ? Colors.white
-        : (isMine ? Colors.white : Colors.black87);
+    final textColor =
+    isSystem ? Colors.white : (isMine ? Colors.white : Colors.black87);
 
-    final align = isMine || isSystem ? CrossAxisAlignment.end : CrossAxisAlignment.start;
-    final mainAxis = isMine || isSystem ? MainAxisAlignment.end : MainAxisAlignment.start;
+    final align =
+    isMine || isSystem ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+    final mainAxis =
+    isMine || isSystem ? MainAxisAlignment.end : MainAxisAlignment.start;
 
     final radius = isSystem
         ? BorderRadius.circular(12)
@@ -58,16 +71,18 @@ class MessageBubble extends StatelessWidget {
                   padding: const EdgeInsets.only(right: 8),
                   child: CircleAvatar(
                     radius: 16,
-                    backgroundImage: message.senderProfileUrl != null
-                        ? NetworkImage(message.senderProfileUrl!)
+                    backgroundImage: message.profileImage != null
+                        ? NetworkImage(message.profileImage!)
                         : null,
-                    child: message.senderProfileUrl == null
+                    child: message.profileImage == null
                         ? const Icon(Icons.person, size: 16)
                         : null,
                   ),
                 ),
               ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.7,
+                ),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: bgColor,
@@ -81,17 +96,18 @@ class MessageBubble extends StatelessWidget {
                     ],
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                    padding:
+                    const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
                     child: Column(
                       crossAxisAlignment: isMine || isSystem
                           ? CrossAxisAlignment.end
                           : CrossAxisAlignment.start,
                       children: [
-                        if (!isMine && !isSystem && showProfile && message.senderName != null)
+                        if (!isMine && !isSystem && showProfile && message.nickname != null)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 4),
                             child: Text(
-                              message.senderName!,
+                              message.nickname!,
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
@@ -99,14 +115,7 @@ class MessageBubble extends StatelessWidget {
                               ),
                             ),
                           ),
-                        Text(
-                          message.content,
-                          style: TextStyle(
-                            color: textColor,
-                            fontSize: isSystem ? 12 : 16,
-                            fontStyle: isSystem ? FontStyle.italic : FontStyle.normal,
-                          ),
-                        ),
+                        _buildMessageContent(textColor),
                       ],
                     ),
                   ),
@@ -115,17 +124,53 @@ class MessageBubble extends StatelessWidget {
               if (isMine) const SizedBox(width: 32),
             ],
           ),
-          if (showTime && !isSystem && message.sentTime != null)
+          if (_shouldShowTime && !isSystem && message.sentAt != null)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                _formatTime(message.sentTime!),
+                _formatTime(message.sentAt!),
                 style: const TextStyle(fontSize: 11, color: Colors.black45),
               ),
             ),
         ],
       ),
     );
+  }
+
+  Widget _buildMessageContent(Color textColor) {
+    switch (message.type?.toUpperCase()) {
+      case 'IMAGE':
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.network(
+            message.content,
+            width: 180,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+            const Icon(Icons.broken_image, size: 60, color: Colors.grey),
+          ),
+        );
+      case 'EMOTICON':
+        return Image.network(
+          message.content,
+          width: 80,
+          height: 80,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) =>
+          const Icon(Icons.emoji_emotions_outlined,
+              size: 40, color: Colors.grey),
+        );
+      default:
+        return Text(
+          message.content,
+          style: TextStyle(
+            color: textColor,
+            fontSize: message.senderId == "system" ? 12 : 16,
+            fontStyle:
+            message.senderId == "system" ? FontStyle.italic : FontStyle.normal,
+          ),
+        );
+    }
   }
 
   String _formatTime(DateTime dt) {
