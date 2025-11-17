@@ -86,31 +86,41 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> with Ti
     final file = await ref.read(userProvider.notifier).pickImageFromGallery();
     if (file == null) return;
 
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: file.path,
-      aspectRatioPresets: [
-        CropAspectRatioPreset.square,
-        CropAspectRatioPreset.ratio4x3,
-        CropAspectRatioPreset.original,
-      ],
-      uiSettings: [
-        AndroidUiSettings(
-          toolbarTitle: "사진 자르기",
-          toolbarColor: Colors.pinkAccent,
-          toolbarWidgetColor: Colors.white,
-          hideBottomControls: false,
-          lockAspectRatio: false,
-        ),
-        IOSUiSettings(title: "사진 자르기"),
-      ],
-    );
+    // 윈도우 / 맥OS / 리눅스 / 웹에서는 크롭 건너뛰기
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      setState(() => _pickedImage = File(file.path));
+      return;
+    }
 
-    if (cropped != null) {
-      setState(() => _pickedImage = File(cropped.path));
+    try {
+      final cropped = await ImageCropper().cropImage(
+        sourcePath: file.path,
+        aspectRatioPresets: [
+          CropAspectRatioPreset.square,
+          CropAspectRatioPreset.ratio4x3,
+          CropAspectRatioPreset.original,
+        ],
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: "사진 자르기",
+            toolbarColor: Colors.pinkAccent,
+            toolbarWidgetColor: Colors.white,
+          ),
+          IOSUiSettings(title: "사진 자르기"),
+        ],
+      );
 
-      _avatarScaleController.forward().then((_) => _avatarScaleController.reverse());
+      if (cropped != null) {
+        setState(() => _pickedImage = File(cropped.path));
+        _avatarScaleController.forward().then((_) => _avatarScaleController.reverse());
+      }
+    } catch (e) {
+      // Desktop에서는 image_cropper 호출하면 여기로 빠짐
+      print("Crop not supported: $e");
+      setState(() => _pickedImage = File(file.path));
     }
   }
+
 
   Future<void> _onContinuePressed() async {
     final nickname = _nicknameController.text.trim();

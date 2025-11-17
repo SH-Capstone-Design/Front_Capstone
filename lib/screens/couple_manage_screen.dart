@@ -84,19 +84,12 @@ class _CoupleManageScreenState extends State<CoupleManageScreen> {
   /// 🔥 커플 해제
   /// ================================
   Future<void> _unlinkCouple() async {
-    // 🔥 먼저 해제 여부 확인 다이얼로그
     final confirm = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        title: const Text(
-          "커플 해제",
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          "두 분의 정보는 30일간 보관됩니다.\n정말 커플 연결을 해제하시겠습니까?",
-          style: TextStyle(fontSize: 15),
-        ),
+        title: const Text("커플 해제"),
+        content: const Text("두 분의 정보는 30일간 보관됩니다.\n정말 커플 연결을 해제하시겠습니까?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -110,7 +103,6 @@ class _CoupleManageScreenState extends State<CoupleManageScreen> {
       ),
     );
 
-    // 취소 → 중단
     if (confirm != true) return;
 
     try {
@@ -119,28 +111,54 @@ class _CoupleManageScreenState extends State<CoupleManageScreen> {
 
       final success = await CoupleService.unlinkCouple(token);
 
-      if (success && mounted) {
-        // 🔥 해제 완료 알림
-        await showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text("커플 해제 완료"),
-            content: const Text("커플 연결이 해제되었습니다."),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("확인"),
-              ),
-            ],
-          ),
-        );
-
-        // 🔥 메인 화면으로 이동
-        Navigator.pushNamedAndRemoveUntil(context, '/main', (route) => false);
-      } else if (mounted) {
+      if (!success) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("커플 해제 실패")),
         );
+        return;
+      }
+
+      // 🔥 서버 DB 동기화를 기다리기 위한 딜레이 (중요!)
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // 🔥 서버 상태 재확인
+      final status = await CoupleService.fetchCoupleStatus();
+
+      // 🔥 status가 NONE 또는 UNLINKED인지 확인
+      if (status == null ||
+          (status['status'] != 'NONE' && status['status'] != 'UNLINKED')) {
+        print("⚠ 서버가 아직 상태 초기화 안됨 → 재확인 필요");
+        await Future.delayed(const Duration(seconds: 1));
+      }
+
+      // 🔥 2차 확인
+      final finalStatus = await CoupleService.fetchCoupleStatus();
+
+      if (finalStatus == null ||
+          (finalStatus['status'] != 'NONE' &&
+              finalStatus['status'] != 'UNLINKED')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("서버 상태 초기화 지연 중입니다.")),
+        );
+        return;
+      }
+
+      // 🔥 여기 도착하면 확실히 unlink 성공
+      await AuthService.deleteToken();
+      await AuthService.deleteGoogleIdToken();
+
+      if (mounted) {
+        await showDialog(
+          context: context,
+          builder: (_) => const AlertDialog(
+            title: Text("커플 해제 완료"),
+            content: Text("커플 연결이 해제되었습니다."),
+          ),
+        );
+      }
+
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
       }
     } catch (e) {
       if (mounted) {
@@ -150,6 +168,8 @@ class _CoupleManageScreenState extends State<CoupleManageScreen> {
       }
     }
   }
+
+
 
   @override
   Widget build(BuildContext context) {
