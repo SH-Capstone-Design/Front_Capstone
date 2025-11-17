@@ -44,7 +44,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 2;
   late PageController _pageController;
 
-  // ★ 구독 스트림을 모두 정리하기 위함
   StreamSubscription? _stompSubscription;
   StreamSubscription? _eventSubscription;
 
@@ -82,7 +81,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _connectStompQueue();
   }
 
-  /// 출석 다이얼로그 자동 표시
   Future<void> _showAttendanceDialogIfNeeded() async {
     if (_hasCheckedAttendance || _isAttendanceDialogOpen) return;
 
@@ -154,7 +152,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  /// ★ STOMP 연결 + 이벤트 처리
   Future<void> _connectStompQueue() async {
     final repo = ref.read(chatRepositoryProvider);
 
@@ -169,7 +166,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         );
       }
 
-      /// ★ 수정된 이벤트 스트림 처리
       _eventSubscription = repo.eventStream.listen((event) async {
         if (!mounted) return;
 
@@ -178,6 +174,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           orElse: () => "unknown",
         );
 
+        // 초대 이벤트
         if (event.eventType == "INVITATION" &&
             event.payload['chatSessionId'] != null &&
             !_hasNavigatedToChat) {
@@ -188,11 +185,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           }
         }
 
-        if (event.eventType == "INVITATION_CANCEL" &&
+        // 초대 취소 이벤트
+        if (event.eventType == "INVITATION_CANCELED" &&
             event.payload['chatSessionId'] != null) {
+          debugPrint("💬 상대방이 초대를 취소했습니다. 다이얼로그 닫기");
           _cancelInvitationDialog();
         }
 
+        // 대화 시작 이벤트
         if (event.eventType == "CONVERSATION_STARTED" &&
             event.chatSessionId != null &&
             context.mounted &&
@@ -205,7 +205,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  /// 초대 다이얼로그
   void _showInvitationDialog({required String chatSessionId, required String? inviterId}) {
     if (_isInvitationDialogOpen || !mounted || !context.mounted) return;
 
@@ -224,6 +223,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
+      useRootNavigator: true, // ★ rootNavigator로 띄우기
       builder: (ctx) {
         _invitationDialogContext = ctx;
         return AlertDialog(
@@ -232,8 +232,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           actions: [
             TextButton(
               onPressed: () {
-                if (ctx.mounted) Navigator.pop(ctx);
-                _isInvitationDialogOpen = false;
+                // 거절 클릭 시 바로 다이얼로그 pop하지 않고
+                // 이벤트처럼 _cancelInvitationDialog()를 호출하도록 변경
                 ref.read(chatRepositoryProvider).sendCancel(chatSessionId: chatSessionId);
               },
               child: const Text("거절"),
@@ -264,14 +264,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _cancelInvitationDialog() {
-    if (_isInvitationDialogOpen && _invitationDialogContext != null) {
-      if (_invitationDialogContext!.mounted) {
-        Navigator.of(_invitationDialogContext!).pop();
+    if (_isInvitationDialogOpen) {
+      try {
+        if (_invitationDialogContext != null &&
+            Navigator.of(_invitationDialogContext!, rootNavigator: true).canPop()) {
+          Navigator.of(_invitationDialogContext!, rootNavigator: true).pop();
+        }
+      } catch (e) {
+        debugPrint("⚠️ 초대 다이얼로그 닫기 실패: $e");
+      } finally {
+        _isInvitationDialogOpen = false;
+        _invitationDialogContext = null;
       }
-      _isInvitationDialogOpen = false;
-      _invitationDialogContext = null;
     }
   }
+
 
   void _navigateToChat(String chatSessionId, String userId) {
     if (!mounted || !context.mounted) return;
@@ -487,13 +494,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             );
           },
           loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-          error: (err, st) =>
-          const Scaffold(body: Center(child: Text('커플 정보를 불러올 수 없습니다.'))),
+          error: (err, st) => const Scaffold(body: Center(child: Text('커플 정보를 불러올 수 없습니다.'))),
         );
       },
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (err, st) =>
-      const Scaffold(body: Center(child: Text('사용자 정보를 불러올 수 없습니다.'))),
+      error: (err, st) => const Scaffold(body: Center(child: Text('사용자 정보를 불러올 수 없습니다.'))),
     );
   }
 }

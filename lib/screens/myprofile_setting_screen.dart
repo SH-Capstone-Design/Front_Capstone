@@ -32,33 +32,45 @@ class _MyProfileSettingScreenState
 
   /// ✅ 이미지 자르기 기능 추가
   Future<File?> _cropImage(File imageFile) async {
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: imageFile.path,
-      aspectRatioPresets: [
-        CropAspectRatioPreset.square, // 정사각형 (프로필용)
-      ],
-      uiSettings: [
-        AndroidUiSettings(
-          toolbarTitle: '이미지 자르기',
-          toolbarColor: Colors.pinkAccent,
-          toolbarWidgetColor: Colors.white,
-          initAspectRatio: CropAspectRatioPreset.square,
-          lockAspectRatio: true,
-        ),
-        IOSUiSettings(
-          title: '이미지 자르기',
-          aspectRatioLockEnabled: true,
-        ),
-      ],
-    );
-    return cropped != null ? File(cropped.path) : null;
+    // ⛔ Windows, macOS, Linux, Web에서는 크롭하지 않음
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      return imageFile; // 원본 그대로 사용
+    }
+
+    try {
+      final cropped = await ImageCropper().cropImage(
+        sourcePath: imageFile.path,
+        aspectRatioPresets: [
+          CropAspectRatioPreset.square, // 정사각형 (프로필용)
+        ],
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: '이미지 자르기',
+            toolbarColor: Colors.pinkAccent,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+          ),
+          IOSUiSettings(
+            title: '이미지 자르기',
+            aspectRatioLockEnabled: true,
+          ),
+        ],
+      );
+
+      return cropped != null ? File(cropped.path) : null;
+    } catch (e) {
+      // 혹시 예외 발생해도 앱은 정상 작동
+      print("Image crop not supported on this platform: $e");
+      return imageFile;
+    }
   }
 
   /// 갤러리에서 이미지 선택
   Future<void> _pickImage() async {
     final file = await ref.read(userProvider.notifier).pickImageFromGallery();
     if (file != null) {
-      final croppedFile = await _cropImage(file); // ✅ 선택 후 자르기
+      final croppedFile = await _cropImage(file);
       if (croppedFile != null) {
         setState(() => _pickedImage = croppedFile);
       }

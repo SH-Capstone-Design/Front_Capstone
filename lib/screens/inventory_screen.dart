@@ -23,9 +23,15 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> {
   @override
   void initState() {
     super.initState();
-    // 화면 진입 시 서버에서 인벤토리 및 현재 데코 불러오기
+
     Future.microtask(() async {
+      // 이미 dispose 됐으면 종료
+      if (!mounted) return;
+
       await ref.read(inventoryProvider.notifier).fetchInventory();
+
+      if (!mounted) return;
+
       await ref.read(currentDecorationProvider.notifier).fetchCurrentDecoration();
     });
   }

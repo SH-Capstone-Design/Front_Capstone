@@ -114,7 +114,6 @@ class ChatRepositoryImpl implements ChatRepository {
               debugPrint("❌ 대화 종료 → $chatSessionId");
             }
           } else if (data.containsKey("senderId") && data.containsKey("content")) {
-            // messageType에 따라 ChatMessage 생성
             final typeStr = (data['messageType'] as String?)?.toUpperCase() ?? 'TEXT';
             final msg = ChatMessage(
               chatSessionId: data['chatSessionId'] as String,
@@ -216,6 +215,11 @@ class ChatRepositoryImpl implements ChatRepository {
     }
     socket.sendInvite(chatSessionId: chatSessionId, inviteeId: inviteeId);
     debugPrint("📨 초대 전송 → $chatSessionId to $inviteeId");
+  }
+
+  /// 거절 및 취소 공용
+  Future<void> sendCancelInvitation({required String chatSessionId}) async {
+    await sendCancel(chatSessionId: chatSessionId);
   }
 
   Future<void> sendCancel({required String chatSessionId}) async {

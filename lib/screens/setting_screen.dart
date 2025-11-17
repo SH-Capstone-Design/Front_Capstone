@@ -53,15 +53,17 @@ class SettingScreen extends StatelessWidget {
   }
 
   Future<void> _deleteAccount(BuildContext context) async {
+    // 🔹 회원탈퇴 확인 다이얼로그 (30일 데이터 보관 안내 포함)
     final shouldDelete = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text(
           '회원탈퇴',
           style: TextStyle(fontFamily: 'GowunBatang'),
         ),
         content: const Text(
-          '모든 데이터가 삭제됩니다. 그래도 정말 탈퇴를 하시겠습니까?',
+          '모든 데이터가 삭제됩니다.\n커플 정보는 30일간 보관됩니다.\n그래도 탈퇴하시겠습니까?',
           style: TextStyle(fontFamily: 'GowunBatang'),
         ),
         actions: [
@@ -85,6 +87,7 @@ class SettingScreen extends StatelessWidget {
       ),
     );
 
+    // 취소 시 종료
     if (shouldDelete != true) return;
 
     try {
@@ -93,16 +96,18 @@ class SettingScreen extends StatelessWidget {
 
       final response = await http.delete(
         Uri.parse('${dotenv.env['BASE_URL']}/users/me'),
-        headers: {'Authorization': 'Bearer $token'},
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
       );
 
       if (response.statusCode == 200) {
-        // 탈퇴 성공
+        // ✅ 탈퇴 성공 → JWT 삭제 후 로그인 화면 이동
         await AuthService.deleteToken();
         await AuthService.deleteGoogleIdToken();
         if (context.mounted) {
-          Navigator.pushNamedAndRemoveUntil(
-              context, '/login', (route) => false);
+          Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
         }
       } else {
         if (context.mounted) {
@@ -119,6 +124,7 @@ class SettingScreen extends StatelessWidget {
       }
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

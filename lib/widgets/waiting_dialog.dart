@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 class WaitingDialog extends StatelessWidget {
   final String message;
+  final VoidCallback? onCancel; // 추가
 
-  const WaitingDialog({super.key, required this.message});
+  const WaitingDialog({super.key, required this.message, this.onCancel});
 
   @override
   Widget build(BuildContext context) {
@@ -26,12 +27,8 @@ class WaitingDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () {
-            // 다이얼로그 닫고 홈 화면으로 이동
             Navigator.of(context).pop(); // 다이얼로그 닫기
-            Navigator.of(context).pushNamedAndRemoveUntil(
-              '/home', // 홈 화면 라우트 이름
-                  (route) => false, // 기존 화면 모두 제거
-            );
+            if (onCancel != null) onCancel!(); // 서버로 취소 이벤트 보내기
           },
           child: const Text(
             '취소',
