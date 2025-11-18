@@ -6,6 +6,7 @@ import 'package:connectbeat/models/chat_room_event.dart';
 import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/widgets/end_chat_dialog.dart';
 import 'package:connectbeat/widgets/reportloading_dialog.dart';
+import 'package:connectbeat/widgets/rounded_button.dart';
 import 'package:connectbeat/widgets/waiting_dialog.dart';
 import 'package:connectbeat/widgets/message_input_bar.dart';
 import 'package:flutter/material.dart';
@@ -52,12 +53,14 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   bool _isManualClosing = false;
   bool _showEmojiPicker = false;
 
+  static const double _headerHeight = 60.0;
   static const double _messageInputBarHeight = 60.0;
   static const double _emojiPickerHeight = 250.0;
 
   double get _bottomInset {
-    // 이모티콘 열리면 높이만큼 패딩 추가, 키보드 올라오면 키보드 높이 반영
-    return (_showEmojiPicker ? _emojiPickerHeight : 0) + MediaQuery.of(context).viewInsets.bottom + _messageInputBarHeight;
+    return (_showEmojiPicker ? _emojiPickerHeight : 0) +
+        MediaQuery.of(context).viewInsets.bottom +
+        _messageInputBarHeight;
   }
 
   @override
@@ -93,7 +96,8 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     });
 
     _eventSub = repo.subscribeEvents(chatSessionId).listen((event) async {
-      if (_isDisposed) return;
+      if (_isDisposed || !mounted) return;
+
       switch (event.eventType) {
         case "USER_JOINED":
           _dismissWaitingDialog();
@@ -113,8 +117,9 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
         case "INVITATION_CANCELED":
           _dismissWaitingDialog();
           _addSystemMessage("🚫 상대방이 초대를 취소했습니다.");
-          if (!mounted) return;
-          Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+          if (!_isManualClosing && mounted) {
+            Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+          }
           break;
         case "CONVERSATION_STARTED":
           if (!_chatStarted) {
@@ -137,20 +142,32 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   void _showWaitingDialog() {
     if (_isWaitingDialogShown || !mounted) return;
     _isWaitingDialogShown = true;
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const WaitingDialog(
+      useRootNavigator: true,
+      builder: (_) => WaitingDialog(
         message: "상대방이 입장할 때까지 기다려주세요...",
+        onCancel: () async {
+          final repo = ref.read(chatRepositoryProvider);
+          await repo.sendCancel(chatSessionId: widget.room.chatSessionId);
+          if (mounted) Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
+        },
       ),
     ).then((_) => _isWaitingDialogShown = false);
   }
 
   void _dismissWaitingDialog() {
-    if (!_isWaitingDialogShown || !mounted) return;
+    if (!_isWaitingDialogShown) return;
     _isWaitingDialogShown = false;
-    if (Navigator.of(context, rootNavigator: true).canPop()) {
-      Navigator.of(context, rootNavigator: true).pop();
+
+    try {
+      if (mounted && Navigator.of(context, rootNavigator: true).canPop()) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    } catch (e) {
+      debugPrint("⚠️ WaitingDialog 닫기 실패: $e");
     }
   }
 
@@ -334,28 +351,37 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
+    return WillPopScope(
+      onWillPop: () async => false,
+      child: Scaffold(
+        resizeToAvoidBottomInset: true, // 키보드/이모티콘에 맞춰 화면 조정
+        body: SafeArea(
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              FocusScope.of(context).unfocus();
+              if (_showEmojiPicker) setState(() => _showEmojiPicker = false);
+            },
+            child: Column(
               children: [
+                // 헤더
                 _buildHeader(),
-                Expanded(
-                  child: AnimatedPadding(
-                    duration: const Duration(milliseconds: 250),
-                    padding: EdgeInsets.only(bottom: _bottomInset),
-                    child: _buildMessageList(ref.watch(coupleStatusProvider)),
+
+                // 메시지 리스트
+                Expanded(child: _buildMessageList(ref.watch(coupleStatusProvider))),
+
+                // 이모티콘 창
+                if (_showEmojiPicker)
+                  SizedBox(
+                    height: _emojiPickerHeight,
+                    child: Container(
+                      color: Colors.white,
+                      child: Center(child: Text("이모티콘 패널")), // 실제 이모티콘 위젯으로 교체
+                    ),
                   ),
-                ),
-              ],
-            ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: SafeArea(
-                top: false,
-                child: MessageInputBar(
+
+                // 입력창
+                MessageInputBar(
                   onSend: _sendMessage,
                   onSendImage: _sendImageMessage,
                   onSendEmoticon: _sendEmoticonMessage,
@@ -365,35 +391,37 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                     if (visible) FocusScope.of(context).unfocus();
                   },
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
+
+  // -----------------------------
+  // 헤더
   Widget _buildHeader() {
-    return Padding(
+    return Container(
+      color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: () async {
-              if (_isEnding) return;
-              final shouldEnd = await showDialog<bool>(
-                context: context,
-                builder: (_) => EndChatDialog(chatSessionId: widget.room.chatSessionId),
-              );
-              if (shouldEnd == true) await _handleEndSession(navigateToResult: true);
-            },
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.redAccent.withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.exit_to_app, color: Colors.black, size: 22),
+          SizedBox(
+            width: 80,
+            height: 40,
+            child: RoundedButton(
+              text: "채팅 종료",
+              fontSize: 14,
+              onPressed: () async {
+                if (_isEnding) return;
+                final shouldEnd = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => EndChatDialog(chatSessionId: widget.room.chatSessionId),
+                );
+                if (shouldEnd == true) await _handleEndSession(navigateToResult: true);
+              },
             ),
           ),
           const SizedBox(width: 10),
@@ -428,6 +456,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     );
   }
 
+  // 메시지 리스트
   Widget _buildMessageList(AsyncValue<Map<String, dynamic>?> coupleAsync) {
     return coupleAsync.when(
       data: (coupleData) {
@@ -447,7 +476,8 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
             if (isSystem) return _buildSystemMessage(msg);
 
             return _buildChatMessage(
-                msg, isMe, showProfile, partnerNickname, partnerProfile, previousMsg);
+              msg, isMe, showProfile, partnerNickname, partnerProfile, previousMsg,
+            );
           },
         );
       },

@@ -1,4 +1,3 @@
-// home_screen.dart
 import 'dart:async';
 import 'dart:convert';
 import 'package:connectbeat/models/chat_room.dart';
@@ -25,6 +24,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// ✅ 커플 상태 Provider
 final coupleStatusProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   final couple = await CoupleService.fetchCoupleStatus();
   if (couple != null && couple['partnerId'] != null) {
@@ -43,91 +43,91 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 2;
   late PageController _pageController;
-
-  // ★ 구독 스트림을 모두 정리하기 위함
-  StreamSubscription? _stompSubscription;
   StreamSubscription? _eventSubscription;
 
   bool _hasNavigatedToChat = false;
-  bool _isInvitationDialogOpen = false;
-  BuildContext? _invitationDialogContext;
-
-  bool _hasCheckedAttendance = false;
   bool _isAttendanceDialogOpen = false;
+  bool _hasCheckedAttendance = false;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: _currentIndex);
-
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _initHome();
-      _showAttendanceDialogIfNeeded();
+      await ref.read(inventoryProvider.notifier).fetchInventory();
+      await ref.read(currentDecorationProvider.notifier).fetchCurrentDecoration();
+      if (!_hasCheckedAttendance) {
+        final canCheckIn = await _canCheckInToday();
+        if (canCheckIn && mounted) {
+          _hasCheckedAttendance = true;
+          await _showAttendanceDialogIfNeeded();
+        }
+      }
     });
-  }
-
-  @override
-  void dispose() {
-    _stompSubscription?.cancel();
-    _eventSubscription?.cancel();
-    super.dispose();
   }
 
   Future<void> _initHome() async {
     ref.read(userProvider.notifier).fetchUser();
     await ref.read(coinProvider.notifier).loadCoin();
-    await ref.read(inventoryProvider.notifier).fetchInventory();
-    await ref.read(currentDecorationProvider.notifier).fetchCurrentDecoration();
     _loadCoupleDDay();
     _connectStompQueue();
   }
 
-  /// 출석 다이얼로그 자동 표시
-  Future<void> _showAttendanceDialogIfNeeded() async {
-    if (_hasCheckedAttendance || _isAttendanceDialogOpen) return;
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _eventSubscription?.cancel();
+    super.dispose();
+  }
 
-    final user = ref.read(userProvider).maybeWhen(data: (u) => u, orElse: () => null);
-    if (user == null) return;
-
-    final userId = user['userId'] ?? "unknown";
+  /// 🔸 하루 1회 출석 체크
+  Future<bool> _canCheckInToday() async {
     final prefs = await SharedPreferences.getInstance();
-    final todayKey = "${DateTime.now().year}-${DateTime.now().month}-${DateTime.now().day}";
-    final lastCheckIn = prefs.getString('lastCheckIn_$userId') ?? '';
+    final lastCheckIn = prefs.getInt('lastCheckIn') ?? 0;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    return lastCheckIn < today;
+  }
 
-    if (lastCheckIn == todayKey) {
-      _hasCheckedAttendance = true;
-      return;
-    }
+  Future<void> _markCheckedInToday() async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    await prefs.setInt('lastCheckIn', today);
+  }
+
+  Future<void> _showAttendanceDialogIfNeeded() async {
+    if (_isAttendanceDialogOpen) return;
+
+    final canCheckIn = await _canCheckInToday();
+    if (!canCheckIn) return;
+
+    final token = await AuthService.getToken();
+    if (token == null || token.isEmpty) return;
 
     _isAttendanceDialogOpen = true;
-
     try {
       final attendanceService = AttendanceService(baseUrl: dotenv.env['BASE_URL']!);
-      final status = await attendanceService.getStatus();
-
+      final result = await attendanceService.checkIn();
       if (!mounted) return;
 
-      if (status['todayChecked'] == true) {
-        await prefs.setString('lastCheckIn_$userId', todayKey);
-        _hasCheckedAttendance = true;
-        return;
+      if (result['success'] == true) {
+        ref.read(coinProvider.notifier).updateCoin(result['newTotalCoinBalance'] ?? 0);
       }
 
-      if (context.mounted) {
-        await showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => AttendanceDialog(
-            newTotalCoinBalance: status['newTotalCoinBalance'] ?? 0,
-            consecutiveDays: status['consecutiveDays'] ?? 0,
-          ),
-        );
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AttendanceDialog(
+          consecutiveDays: result['consecutiveDays'] ?? 0,
+          newTotalCoinBalance: result['newTotalCoinBalance'] ?? ref.read(coinProvider),
+        ),
+      );
 
-        await prefs.setString('lastCheckIn_$userId', todayKey);
-        _hasCheckedAttendance = true;
-      }
+      await _markCheckedInToday();
     } catch (e) {
-      debugPrint("❌ 출석 상태 확인 실패: $e");
+      debugPrint("❌ 출석 체크 실패: $e");
     } finally {
       _isAttendanceDialogOpen = false;
     }
@@ -154,25 +154,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  /// ★ STOMP 연결 + 이벤트 처리
   Future<void> _connectStompQueue() async {
     final repo = ref.read(chatRepositoryProvider);
-
     try {
       await repo.connectBase();
-
       final pending = await repo.checkPendingInvitation();
-      if (pending != null && !_hasNavigatedToChat && mounted) {
+      if (pending != null && !_hasNavigatedToChat) {
         _showInvitationDialog(
           chatSessionId: pending['chatSessionId'],
           inviterId: pending['inviterId'],
         );
       }
 
-      /// ★ 수정된 이벤트 스트림 처리
       _eventSubscription = repo.eventStream.listen((event) async {
-        if (!mounted) return;
-
         final userId = ref.read(userProvider).maybeWhen(
           data: (u) => u['userId'] ?? "unknown",
           orElse: () => "unknown",
@@ -188,11 +182,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           }
         }
 
-        if (event.eventType == "INVITATION_CANCEL" &&
-            event.payload['chatSessionId'] != null) {
-          _cancelInvitationDialog();
-        }
-
         if (event.eventType == "CONVERSATION_STARTED" &&
             event.chatSessionId != null &&
             context.mounted &&
@@ -205,10 +194,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  /// 초대 다이얼로그
   void _showInvitationDialog({required String chatSessionId, required String? inviterId}) {
-    if (_isInvitationDialogOpen || !mounted || !context.mounted) return;
-
     final coupleStatus = ref.read(coupleStatusProvider).maybeWhen(
       data: (data) => data,
       orElse: () => null,
@@ -219,63 +205,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       partnerNickname = coupleStatus['partnerNickname'] ?? inviterId;
     }
 
-    _isInvitationDialogOpen = true;
-
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) {
-        _invitationDialogContext = ctx;
-        return AlertDialog(
-          title: const Text("채팅 초대"),
-          content: Text("$partnerNickname 님이 채팅을 초대했습니다."),
-          actions: [
-            TextButton(
-              onPressed: () {
-                if (ctx.mounted) Navigator.pop(ctx);
-                _isInvitationDialogOpen = false;
-                ref.read(chatRepositoryProvider).sendCancel(chatSessionId: chatSessionId);
-              },
-              child: const Text("거절"),
-            ),
-            TextButton(
-              onPressed: () async {
-                if (ctx.mounted) Navigator.pop(ctx);
-                _isInvitationDialogOpen = false;
-
-                final repo = ref.read(chatRepositoryProvider);
-                if (!repo.isSubscribed(chatSessionId)) {
-                  await repo.subscribeRoom(chatSessionId: chatSessionId);
-                  await repo.sendJoin(chatSessionId: chatSessionId);
-                }
-                if (!_hasNavigatedToChat && context.mounted) {
-                  _navigateToChat(chatSessionId, ref.read(userProvider).maybeWhen(
-                    data: (u) => u['userId'] ?? "unknown",
-                    orElse: () => "unknown",
-                  ));
-                }
-              },
-              child: const Text("수락"),
-            ),
-          ],
-        );
-      },
+      builder: (_) => AlertDialog(
+        title: const Text("채팅 초대"),
+        content: Text("$partnerNickname 님이 채팅을 초대했습니다."),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ref.read(chatRepositoryProvider).sendCancel(chatSessionId: chatSessionId);
+              setState(() => _hasNavigatedToChat = false);
+            },
+            child: const Text("거절"),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final repo = ref.read(chatRepositoryProvider);
+              if (!repo.isSubscribed(chatSessionId)) {
+                await repo.subscribeRoom(chatSessionId: chatSessionId);
+                await repo.sendJoin(chatSessionId: chatSessionId);
+              }
+              if (!_hasNavigatedToChat && context.mounted) {
+                _navigateToChat(chatSessionId, ref.read(userProvider).maybeWhen(
+                  data: (u) => u['userId'] ?? "unknown",
+                  orElse: () => "unknown",
+                ));
+              }
+            },
+            child: const Text("수락"),
+          ),
+        ],
+      ),
     );
   }
 
-  void _cancelInvitationDialog() {
-    if (_isInvitationDialogOpen && _invitationDialogContext != null) {
-      if (_invitationDialogContext!.mounted) {
-        Navigator.of(_invitationDialogContext!).pop();
-      }
-      _isInvitationDialogOpen = false;
-      _invitationDialogContext = null;
-    }
-  }
-
   void _navigateToChat(String chatSessionId, String userId) {
-    if (!mounted || !context.mounted) return;
-
     _hasNavigatedToChat = true;
     Navigator.pushReplacement(
       context,
@@ -295,11 +262,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final sessionState = ref.read(sessionControllerProvider);
 
     if (partnerId.isEmpty || partnerId == "unknown") {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("상대방 정보가 없습니다. 커플 연결을 먼저 완료하세요.")),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("상대방 정보가 없습니다. 커플 연결을 먼저 완료하세요.")),
+      );
       return;
     }
 
@@ -314,6 +279,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return;
       }
 
+      debugPrint("🆕 새로운 세션 생성 시작");
       final ChatRoom room = await repo.startSession();
       sessionCtrl.setSession(room.chatSessionId);
 
@@ -348,9 +314,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             final userId = user['userId'] ?? "unknown";
             final partnerId = ref.watch(sessionControllerProvider).partnerId ?? "unknown";
 
-            final bgUrl = currentDeco?.backgroundItem?.imageUrl;
-            final clothesUrl = currentDeco?.clothesItem?.imageUrl;
+            final bgUrl = currentDeco?.backgroundItem?.assetUrl ??
+                currentDeco?.backgroundItem?.imageUrl ??
+                AppConstants.backgroundHomePath;
 
+            final clothesUrl = currentDeco?.clothesItem?.assetUrl ??
+                currentDeco?.clothesItem?.imageUrl;
+
+            // 캐릭터+옷 하나만 보여주도록 수정
             final screens = [
               ChatReportListScreen(coupleId: couple['coupleId'] ?? 0),
               const CharacterScreen(),
@@ -433,9 +404,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             fit: BoxFit.contain,
                           ),
                         ),
-                        const SizedBox(height: 5),
+                        const SizedBox(height: 10),
                         if (clothesUrl != null && clothesUrl.isNotEmpty)
-                          Center(
+                          SizedBox(
+                            height: 350, // 화면 비율에 맞게 조정
                             child: Image.network(
                               clothesUrl,
                               fit: BoxFit.contain,
@@ -450,11 +422,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               const SettingScreen(),
             ];
 
+
             return WillPopScope(
               onWillPop: () async => false,
               child: Scaffold(
-                body: bgUrl != null && bgUrl.isNotEmpty
-                    ? Container(
+                body: Container(
                   decoration: BoxDecoration(
                     image: DecorationImage(
                       image: NetworkImage(bgUrl),
@@ -466,11 +438,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     onPageChanged: (index) => setState(() => _currentIndex = index),
                     children: screens,
                   ),
-                )
-                    : PageView(
-                  controller: _pageController,
-                  onPageChanged: (index) => setState(() => _currentIndex = index),
-                  children: screens,
                 ),
                 bottomNavigationBar: BottomBar(
                   currentIndex: _currentIndex,
@@ -487,13 +454,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             );
           },
           loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-          error: (err, st) =>
-          const Scaffold(body: Center(child: Text('커플 정보를 불러올 수 없습니다.'))),
+          error: (err, st) => const Scaffold(body: Center(child: Text('커플 정보를 불러올 수 없습니다.'))),
         );
       },
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (err, st) =>
-      const Scaffold(body: Center(child: Text('사용자 정보를 불러올 수 없습니다.'))),
+      error: (err, st) => const Scaffold(body: Center(child: Text('사용자 정보를 불러올 수 없습니다.'))),
     );
   }
 }

@@ -1,11 +1,17 @@
-// lib/screens/my_profile_setting_screen.dart
+// lib/screens/myprofile_setting_screen.dart
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_cropper/image_cropper.dart';
+import 'package:kakao_flutter_sdk/kakao_flutter_sdk.dart';
+import 'package:mime/mime.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import '../core/constants.dart';
 import '../providers/user_provider.dart';
 import '../widgets/rounded_button.dart';
-import '../core/constants.dart';
+import '../services/auth_service.dart';
 
 class MyProfileSettingScreen extends ConsumerStatefulWidget {
   const MyProfileSettingScreen({super.key});
@@ -20,90 +26,103 @@ class _MyProfileSettingScreenState
   late TextEditingController _nicknameController;
   File? _pickedImage;
   String? _latestProfileUrl;
-  bool _isUploading = false;
 
   @override
   void initState() {
     super.initState();
-    final user = ref.read(userProvider).value;
+    final userState = ref.read(userProvider);
+    final user = userState.value;
     _nicknameController = TextEditingController(text: user?['nickname'] ?? '');
     _latestProfileUrl = user?['profileImage'];
+    _fetchLatestKakaoProfile();
   }
 
-  /// ✅ 이미지 자르기 기능 추가
-  Future<File?> _cropImage(File imageFile) async {
-    final cropped = await ImageCropper().cropImage(
-      sourcePath: imageFile.path,
-      aspectRatioPresets: [
-        CropAspectRatioPreset.square, // 정사각형 (프로필용)
-      ],
-      uiSettings: [
-        AndroidUiSettings(
-          toolbarTitle: '이미지 자르기',
-          toolbarColor: Colors.pinkAccent,
-          toolbarWidgetColor: Colors.white,
-          initAspectRatio: CropAspectRatioPreset.square,
-          lockAspectRatio: true,
-        ),
-        IOSUiSettings(
-          title: '이미지 자르기',
-          aspectRatioLockEnabled: true,
-        ),
-      ],
-    );
-    return cropped != null ? File(cropped.path) : null;
+  @override
+  void dispose() {
+    _nicknameController.dispose();
+    super.dispose();
   }
 
-  /// 갤러리에서 이미지 선택
+  Future<void> _fetchLatestKakaoProfile() async {
+    try {
+      final hasKakaoToken = await AuthApi.instance.hasToken();
+      if (hasKakaoToken) {
+        final kakaoUser = await UserApi.instance.me();
+        setState(() {
+          _latestProfileUrl =
+              kakaoUser.kakaoAccount?.profile?.profileImageUrl ?? _latestProfileUrl;
+        });
+      }
+    } catch (_) {}
+  }
+
   Future<void> _pickImage() async {
     final file = await ref.read(userProvider.notifier).pickImageFromGallery();
     if (file != null) {
-      final croppedFile = await _cropImage(file); // ✅ 선택 후 자르기
-      if (croppedFile != null) {
-        setState(() => _pickedImage = croppedFile);
-      }
+      setState(() {
+        _pickedImage = file;
+      });
     }
   }
 
-  /// 저장 버튼 눌렀을 때
+  /// 🔹 S3 업로드
+  Future<String?> _uploadImage(File imageFile) async {
+    final token = await AuthService.getToken();
+    print('JWT Token: $token');
+    if (token == null) return null;
+
+    final uri = Uri.parse('${dotenv.env['BASE_URL']}/users/me/profile-image');
+    print('POST URL: ${dotenv.env['BASE_URL']}/users/me/profile-image');
+    final request = http.MultipartRequest('POST', uri);
+    request.headers['Authorization'] = 'Bearer $token';
+
+    final mimeType = lookupMimeType(imageFile.path)?.split('/') ?? ['image', 'jpeg'];
+
+    request.files.add(await http.MultipartFile.fromPath(
+      'image',
+      imageFile.path,
+      contentType: MediaType(mimeType[0], mimeType[1]),
+    ));
+
+    final response = await request.send();
+    final respStr = await response.stream.bytesToString();
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(respStr);
+      return data['profileImageUrl'];
+    } else {
+      throw Exception('업로드 실패: ${response.statusCode} $respStr');
+    }
+  }
+
   Future<void> _onSavePressed() async {
     final nickname = _nicknameController.text.trim();
     if (nickname.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('닉네임을 입력해주세요.')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('닉네임을 입력해주세요.')));
       return;
     }
 
-    setState(() => _isUploading = true);
-
     try {
-      // 1️⃣ 이미지 업로드
+      String? imageUrl;
       if (_pickedImage != null) {
-        final imageUrl = await ref
-            .read(userProvider.notifier)
-            .uploadProfileImage(_pickedImage!);
-        setState(() {
-          _latestProfileUrl = imageUrl;
-          _pickedImage = null;
-        });
+        imageUrl = await _uploadImage(_pickedImage!);
+      } else if (_latestProfileUrl != null && _latestProfileUrl!.isNotEmpty) {
+        imageUrl = _latestProfileUrl;
       }
 
-      // 2️⃣ 닉네임 업데이트
-      await ref.read(userProvider.notifier).updateNickname(nickname);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('프로필이 저장되었습니다.')),
-        );
-        Navigator.pop(context, true);
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('업데이트 실패: $e')),
+      await ref.read(userProvider.notifier).updateUser(
+        nickname: nickname,
+        profileImage: imageUrl,
       );
-    } finally {
-      setState(() => _isUploading = false);
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('프로필이 저장되었습니다.')));
+      Navigator.pop(context);
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('업데이트 실패: $e')));
+      print(e);
     }
   }
 
@@ -117,7 +136,13 @@ class _MyProfileSettingScreenState
         body: Center(child: CircularProgressIndicator()),
       );
     }
+    if (userState.hasError) {
+      return Scaffold(
+        body: Center(child: Text('사용자 정보 불러오기 실패')),
+      );
+    }
 
+    final user = userState.value;
     ImageProvider? avatar;
     if (_pickedImage != null) {
       avatar = FileImage(_pickedImage!);
@@ -126,20 +151,14 @@ class _MyProfileSettingScreenState
     }
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text(
           '내 프로필 설정',
           style: TextStyle(fontFamily: 'GowunBatang', color: Colors.black),
         ),
         backgroundColor: Colors.transparent,
-        elevation: 0,
         foregroundColor: Colors.black,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios),
-          onPressed: () => Navigator.pop(context),
-        ),
-        centerTitle: true,
+        elevation: 0,
       ),
       body: Stack(
         children: [
@@ -151,65 +170,64 @@ class _MyProfileSettingScreenState
           ),
           SafeArea(
             child: SingleChildScrollView(
-              padding: EdgeInsets.symmetric(horizontal: size.width * 0.06),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 100),
-                  Center(
-                    child: GestureDetector(
-                      onTap: _pickImage,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          CircleAvatar(
-                            radius: 60,
-                            backgroundColor: Colors.grey[200],
-                            backgroundImage: avatar,
-                            child: avatar == null
-                                ? const Icon(Icons.person,
-                                size: 60, color: Colors.grey)
-                                : null,
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: size.width * 0.06),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 20),
+                    Center(
+                      child: GestureDetector(
+                        onTap: _pickImage,
+                        child: CircleAvatar(
+                          radius: 60,
+                          backgroundColor: Colors.grey[200],
+                          backgroundImage: avatar,
+                          child: avatar == null
+                              ? const Icon(Icons.person,
+                              size: 60, color: Colors.grey)
+                              : null,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Center(
+                      child: Text(
+                        '프로필 설정',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontFamily: 'GowunBatang',
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: TextFormField(
+                        controller: _nicknameController,
+                        style: const TextStyle(
+                          fontFamily: 'GowunBatang',
+                          fontSize: 16,
+                        ),
+                        decoration: const InputDecoration(
+                          hintText: '닉네임 설정',
+                          hintStyle: TextStyle(
+                            fontFamily: 'GowunBatang',
                           ),
-                          if (_isUploading)
-                            const CircularProgressIndicator(),
-                        ],
+                          border: UnderlineInputBorder(),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Center(
-                    child: Text(
-                      '프로필 설정',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontFamily: 'GowunBatang',
-                        fontWeight: FontWeight.bold,
-                      ),
+                    const SizedBox(height: 40),
+                    RoundedButton(
+                      text: '저장하기',
+                      onPressed: _onSavePressed,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: TextFormField(
-                      controller: _nicknameController,
-                      style: const TextStyle(
-                        fontFamily: 'GowunBatang',
-                        fontSize: 16,
-                      ),
-                      decoration: const InputDecoration(
-                        hintText: '닉네임 설정',
-                        border: UnderlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                  RoundedButton(
-                    text: '저장하기',
-                    onPressed: _isUploading ? null : _onSavePressed,
-                  ),
-                  const SizedBox(height: 20),
-                ],
+                    const SizedBox(height: 20),
+                  ],
+                ),
               ),
             ),
           ),
