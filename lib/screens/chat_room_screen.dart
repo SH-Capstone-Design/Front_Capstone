@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:connectbeat/models/chat_room.dart';
 import 'package:connectbeat/models/chat_message.dart';
 import 'package:connectbeat/models/chat_room_event.dart';
-import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/widgets/end_chat_dialog.dart';
 import 'package:connectbeat/widgets/reportloading_dialog.dart';
 import 'package:connectbeat/widgets/rounded_button.dart';
@@ -53,6 +52,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
   bool _isManualClosing = false;
   bool _showEmojiPicker = false;
 
+  static const double _headerHeight = 60.0;
   static const double _messageInputBarHeight = 60.0;
   static const double _emojiPickerHeight = 250.0;
 
@@ -114,16 +114,12 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
           _showWaitingDialog();
           break;
         case "INVITATION_CANCELED":
-        // 내 화면이든 상대 화면이든 다이얼로그 닫기
           _dismissWaitingDialog();
           _addSystemMessage("🚫 상대방이 초대를 취소했습니다.");
-
-          // 내 화면이면 홈으로 돌아가기
           if (!_isManualClosing && mounted) {
             Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
           }
           break;
-
         case "CONVERSATION_STARTED":
           if (!_chatStarted) {
             _chatStarted = true;
@@ -354,28 +350,27 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
+    return WillPopScope(
+      onWillPop: () async => false,
+      child: Scaffold(
+        resizeToAvoidBottomInset: true, // 키보드/이모티콘에 맞춰 화면 조정
+        body: SafeArea(
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              FocusScope.of(context).unfocus();
+              if (_showEmojiPicker) setState(() => _showEmojiPicker = false);
+            },
+            child: Column(
               children: [
+                // 헤더
                 _buildHeader(),
-                Expanded(
-                  child: AnimatedPadding(
-                    duration: const Duration(milliseconds: 250),
-                    padding: EdgeInsets.only(bottom: _bottomInset),
-                    child: _buildMessageList(ref.watch(coupleStatusProvider)),
-                  ),
-                ),
-              ],
-            ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: SafeArea(
-                top: false,
-                child: MessageInputBar(
+
+                // 메시지 리스트
+                Expanded(child: _buildMessageList(ref.watch(coupleStatusProvider))),
+
+                // 입력창
+                MessageInputBar(
                   onSend: _sendMessage,
                   onSendImage: _sendImageMessage,
                   onSendEmoticon: _sendEmoticonMessage,
@@ -385,16 +380,24 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
                     if (visible) FocusScope.of(context).unfocus();
                   },
                 ),
-              ),
+
+                // 이모티콘 패널 제거, 필요시 실제 이모티콘 위젯으로 교체
+                // if (_showEmojiPicker)
+                //   SizedBox.shrink(),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
+
+  // -----------------------------
+  // 헤더
   Widget _buildHeader() {
-    return Padding(
+    return Container(
+      color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         children: [
@@ -446,6 +449,7 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
     );
   }
 
+  // 메시지 리스트
   Widget _buildMessageList(AsyncValue<Map<String, dynamic>?> coupleAsync) {
     return coupleAsync.when(
       data: (coupleData) {
@@ -465,7 +469,8 @@ class _ChatRoomScreenState extends ConsumerState<ChatRoomScreen> {
             if (isSystem) return _buildSystemMessage(msg);
 
             return _buildChatMessage(
-                msg, isMe, showProfile, partnerNickname, partnerProfile, previousMsg);
+              msg, isMe, showProfile, partnerNickname, partnerProfile, previousMsg,
+            );
           },
         );
       },
