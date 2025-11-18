@@ -1,4 +1,3 @@
-// home_screen.dart
 import 'dart:async';
 import 'dart:convert';
 import 'package:connectbeat/models/chat_room.dart';
@@ -11,7 +10,6 @@ import 'package:connectbeat/services/attendance_service.dart';
 import 'package:connectbeat/widgets/attendance_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:connectbeat/core/constants.dart';
 import 'package:connectbeat/providers/couple_date_provider.dart';
 import 'package:connectbeat/providers/user_provider.dart';
 import 'package:connectbeat/providers/session_provider.dart';
@@ -25,6 +23,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// 커플 상태 Provider
 final coupleStatusProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   final couple = await CoupleService.fetchCoupleStatus();
   if (couple != null && couple['partnerId'] != null) {
@@ -43,16 +42,10 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 2;
   late PageController _pageController;
-
-  StreamSubscription? _stompSubscription;
   StreamSubscription? _eventSubscription;
-
   bool _hasNavigatedToChat = false;
-  bool _isInvitationDialogOpen = false;
-  BuildContext? _invitationDialogContext;
-
-  bool _hasCheckedAttendance = false;
   bool _isAttendanceDialogOpen = false;
+  bool _hasCheckedAttendance = false;
 
   @override
   void initState() {
@@ -61,71 +54,93 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _initHome();
-      _showAttendanceDialogIfNeeded();
-    });
-  }
+      await ref.read(inventoryProvider.notifier).fetchInventory();
+      await ref.read(currentDecorationProvider.notifier).fetchCurrentDecoration();
 
-  @override
-  void dispose() {
-    _stompSubscription?.cancel();
-    _eventSubscription?.cancel();
-    super.dispose();
+      if (!_hasCheckedAttendance) {
+        final canCheckIn = await _canCheckInToday();
+        if (canCheckIn && mounted) {
+          _hasCheckedAttendance = true;
+          await _showAttendanceDialogIfNeeded();
+        }
+      }
+    });
   }
 
   Future<void> _initHome() async {
     ref.read(userProvider.notifier).fetchUser();
     await ref.read(coinProvider.notifier).loadCoin();
-    await ref.read(inventoryProvider.notifier).fetchInventory();
-    await ref.read(currentDecorationProvider.notifier).fetchCurrentDecoration();
     _loadCoupleDDay();
     _connectStompQueue();
   }
 
-  Future<void> _showAttendanceDialogIfNeeded() async {
-    if (_hasCheckedAttendance || _isAttendanceDialogOpen) return;
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _eventSubscription?.cancel();
+    super.dispose();
+  }
 
-    final user = ref.read(userProvider).maybeWhen(data: (u) => u, orElse: () => null);
-    if (user == null) return;
+  Future<bool> _canCheckInToday() async {
+  final prefs = await SharedPreferences.getInstance();
+  final raw = prefs.get('lastCheckIn');
+  int lastCheckIn = 0;
 
-    final userId = user['userId'] ?? "unknown";
-    final prefs = await SharedPreferences.getInstance();
-    final todayKey = "${DateTime.now().year}-${DateTime.now().month}-${DateTime.now().day}";
-    final lastCheckIn = prefs.getString('lastCheckIn_$userId') ?? '';
-
-    if (lastCheckIn == todayKey) {
-      _hasCheckedAttendance = true;
-      return;
+  if (raw is int) {
+      lastCheckIn = raw;
+    } else if (raw is String) {
+      lastCheckIn = int.tryParse(raw) ?? 0;
     }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    return lastCheckIn < today;
+  }
+
+  Future<void> _markCheckedInToday() async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final today =
+        DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
+    await prefs.setInt('lastCheckIn', today);
+  }
+
+  Future<void> _showAttendanceDialogIfNeeded() async {
+    if (_isAttendanceDialogOpen) return;
+
+    final canCheckIn = await _canCheckInToday();
+    if (!canCheckIn) return;
+
+    final token = await AuthService.getToken();
+    if (token == null || token.isEmpty) return;
 
     _isAttendanceDialogOpen = true;
 
     try {
-      final attendanceService = AttendanceService(baseUrl: dotenv.env['BASE_URL']!);
-      final status = await attendanceService.getStatus();
-
+      final attendanceService =
+          AttendanceService(baseUrl: dotenv.env['BASE_URL']!);
+      final result = await attendanceService.checkIn();
       if (!mounted) return;
 
-      if (status['todayChecked'] == true) {
-        await prefs.setString('lastCheckIn_$userId', todayKey);
-        _hasCheckedAttendance = true;
-        return;
+      if (result['success'] == true) {
+        ref
+            .read(coinProvider.notifier)
+            .updateCoin(result['newTotalCoinBalance'] ?? 0);
       }
 
-      if (context.mounted) {
-        await showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => AttendanceDialog(
-            newTotalCoinBalance: status['newTotalCoinBalance'] ?? 0,
-            consecutiveDays: status['consecutiveDays'] ?? 0,
-          ),
-        );
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AttendanceDialog(
+          consecutiveDays: result['consecutiveDays'] ?? 0,
+          newTotalCoinBalance:
+              result['newTotalCoinBalance'] ?? ref.read(coinProvider),
+        ),
+      );
 
-        await prefs.setString('lastCheckIn_$userId', todayKey);
-        _hasCheckedAttendance = true;
-      }
+      await _markCheckedInToday();
     } catch (e) {
-      debugPrint("❌ 출석 상태 확인 실패: $e");
+      debugPrint("출석 체크 실패: $e");
     } finally {
       _isAttendanceDialogOpen = false;
     }
@@ -136,8 +151,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     try {
       final token = await AuthService.getToken();
       if (token != null) {
-        final url = Uri.parse('${dotenv.env['BASE_URL']}/couples/status');
-        final response = await http.get(url, headers: {'Authorization': 'Bearer $token'});
+        final url =
+            Uri.parse('${dotenv.env['BASE_URL']}/couples/status');
+        final response =
+            await http.get(url, headers: {'Authorization': 'Bearer $token'});
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
           final dateStr = data['anniversaryDate'];
@@ -148,7 +165,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         }
       }
     } catch (e) {
-      debugPrint("💥 커플 상태 불러오기 실패: $e");
+      debugPrint("커플 상태 불러오기 실패: $e");
     }
   }
 
@@ -159,7 +176,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       await repo.connectBase();
 
       final pending = await repo.checkPendingInvitation();
-      if (pending != null && !_hasNavigatedToChat && mounted) {
+      if (pending != null && !_hasNavigatedToChat) {
         _showInvitationDialog(
           chatSessionId: pending['chatSessionId'],
           inviterId: pending['inviterId'],
@@ -167,123 +184,99 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
 
       _eventSubscription = repo.eventStream.listen((event) async {
-        if (!mounted) return;
-
         final userId = ref.read(userProvider).maybeWhen(
-          data: (u) => u['userId'] ?? "unknown",
-          orElse: () => "unknown",
-        );
+              data: (u) => u['userId'] ?? "unknown",
+              orElse: () => "unknown",
+            );
 
-        // 초대 이벤트
         if (event.eventType == "INVITATION" &&
             event.payload['chatSessionId'] != null &&
             !_hasNavigatedToChat) {
-          final chatSessionId = event.payload['chatSessionId'] as String;
+          final chatSessionId =
+              event.payload['chatSessionId'] as String;
           final inviterId = event.payload['inviterId'] as String?;
           if (inviterId != userId && context.mounted) {
-            _showInvitationDialog(chatSessionId: chatSessionId, inviterId: inviterId);
+            _showInvitationDialog(
+                chatSessionId: chatSessionId, inviterId: inviterId);
           }
         }
 
-        // 초대 취소 이벤트
-        if (event.eventType == "INVITATION_CANCELED" &&
-            event.payload['chatSessionId'] != null) {
-          debugPrint("💬 상대방이 초대를 취소했습니다. 다이얼로그 닫기");
-          _cancelInvitationDialog();
-        }
-
-        // 대화 시작 이벤트
         if (event.eventType == "CONVERSATION_STARTED" &&
             event.chatSessionId != null &&
-            context.mounted &&
-            !_hasNavigatedToChat) {
+            !_hasNavigatedToChat &&
+            context.mounted) {
           _navigateToChat(event.chatSessionId!, userId);
         }
       });
     } catch (e) {
-      debugPrint("❌ STOMP 연결 실패: $e");
+      debugPrint("STOMP 연결 실패: $e");
     }
   }
 
-  void _showInvitationDialog({required String chatSessionId, required String? inviterId}) {
-    if (_isInvitationDialogOpen || !mounted || !context.mounted) return;
-
+  void _showInvitationDialog({
+    required String chatSessionId,
+    required String? inviterId,
+  }) {
     final coupleStatus = ref.read(coupleStatusProvider).maybeWhen(
-      data: (data) => data,
-      orElse: () => null,
-    );
+          data: (data) => data,
+          orElse: () => null,
+        );
 
     String partnerNickname = '상대방';
-    if (coupleStatus != null && inviterId != null && coupleStatus['partnerId'] == inviterId) {
+
+    if (coupleStatus != null &&
+        inviterId != null &&
+        coupleStatus['partnerId'] == inviterId) {
       partnerNickname = coupleStatus['partnerNickname'] ?? inviterId;
     }
-
-    _isInvitationDialogOpen = true;
 
     showDialog(
       context: context,
       barrierDismissible: false,
-      useRootNavigator: true, // ★ rootNavigator로 띄우기
-      builder: (ctx) {
-        _invitationDialogContext = ctx;
-        return AlertDialog(
-          title: const Text("채팅 초대"),
-          content: Text("$partnerNickname 님이 채팅을 초대했습니다."),
-          actions: [
-            TextButton(
-              onPressed: () {
-                // 거절 클릭 시 바로 다이얼로그 pop하지 않고
-                // 이벤트처럼 _cancelInvitationDialog()를 호출하도록 변경
-                ref.read(chatRepositoryProvider).sendCancel(chatSessionId: chatSessionId);
-              },
-              child: const Text("거절"),
-            ),
-            TextButton(
-              onPressed: () async {
-                if (ctx.mounted) Navigator.pop(ctx);
-                _isInvitationDialogOpen = false;
+      builder: (_) => AlertDialog(
+        title: const Text("채팅 초대"),
+        content: Text("$partnerNickname 님이 채팅을 초대했습니다."),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              ref
+                  .read(chatRepositoryProvider)
+                  .sendCancel(chatSessionId: chatSessionId);
+              setState(() => _hasNavigatedToChat = false);
+            },
+            child: const Text("거절"),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final repo = ref.read(chatRepositoryProvider);
 
-                final repo = ref.read(chatRepositoryProvider);
-                if (!repo.isSubscribed(chatSessionId)) {
-                  await repo.subscribeRoom(chatSessionId: chatSessionId);
-                  await repo.sendJoin(chatSessionId: chatSessionId);
-                }
-                if (!_hasNavigatedToChat && context.mounted) {
-                  _navigateToChat(chatSessionId, ref.read(userProvider).maybeWhen(
-                    data: (u) => u['userId'] ?? "unknown",
-                    orElse: () => "unknown",
-                  ));
-                }
-              },
-              child: const Text("수락"),
-            ),
-          ],
-        );
-      },
+              if (!repo.isSubscribed(chatSessionId)) {
+                await repo.subscribeRoom(chatSessionId: chatSessionId);
+                await repo.sendJoin(chatSessionId: chatSessionId);
+              }
+
+              if (!_hasNavigatedToChat && context.mounted) {
+                _navigateToChat(
+                  chatSessionId,
+                  ref.read(userProvider).maybeWhen(
+                        data: (u) => u['userId'] ?? "unknown",
+                        orElse: () => "unknown",
+                      ),
+                );
+              }
+            },
+            child: const Text("수락"),
+          ),
+        ],
+      ),
     );
   }
 
-  void _cancelInvitationDialog() {
-    if (_isInvitationDialogOpen) {
-      try {
-        if (_invitationDialogContext != null &&
-            Navigator.of(_invitationDialogContext!, rootNavigator: true).canPop()) {
-          Navigator.of(_invitationDialogContext!, rootNavigator: true).pop();
-        }
-      } catch (e) {
-        debugPrint("⚠️ 초대 다이얼로그 닫기 실패: $e");
-      } finally {
-        _isInvitationDialogOpen = false;
-        _invitationDialogContext = null;
-      }
-    }
-  }
-
-
   void _navigateToChat(String chatSessionId, String userId) {
-    if (!mounted || !context.mounted) return;
-
     _hasNavigatedToChat = true;
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -296,17 +289,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Future<void> _startChat(BuildContext context, String userId, String partnerId) async {
+  Future<void> _startChat(
+      BuildContext context, String userId, String partnerId) async {
     final repo = ref.read(chatRepositoryProvider);
     final sessionCtrl = ref.read(sessionControllerProvider.notifier);
     final sessionState = ref.read(sessionControllerProvider);
 
     if (partnerId.isEmpty || partnerId == "unknown") {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("상대방 정보가 없습니다. 커플 연결을 먼저 완료하세요.")),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("상대방 정보가 없습니다.")),
+      );
       return;
     }
 
@@ -315,23 +307,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
       if (chatSessionId != null && repo.isSubscribed(chatSessionId)) {
         await repo.sendJoin(chatSessionId: chatSessionId);
+
         if (!_hasNavigatedToChat && context.mounted) {
           _navigateToChat(chatSessionId, userId);
         }
         return;
       }
 
-      final ChatRoom room = await repo.startSession();
+      final room = await repo.startSession();
       sessionCtrl.setSession(room.chatSessionId);
 
       await repo.subscribeRoom(chatSessionId: room.chatSessionId);
-      await repo.sendInvite(chatSessionId: room.chatSessionId, inviteeId: partnerId);
+      await repo.sendInvite(
+        chatSessionId: room.chatSessionId,
+        inviteeId: partnerId,
+      );
 
       if (!_hasNavigatedToChat && context.mounted) {
         _navigateToChat(room.chatSessionId, userId);
       }
     } catch (e) {
-      debugPrint("❌ 대화 시작 실패: $e");
+      debugPrint("대화 시작 실패: $e");
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("대화 시작 실패: $e")),
@@ -351,12 +347,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       data: (user) {
         return coupleAsync.when(
           data: (couple) {
-            final partnerNickname = couple['partnerNickname'] ?? '파트너 없음';
+            final partnerNickname =
+                couple['partnerNickname'] ?? '파트너 없음';
             final userId = user['userId'] ?? "unknown";
-            final partnerId = ref.watch(sessionControllerProvider).partnerId ?? "unknown";
+            final partnerId =
+                ref.watch(sessionControllerProvider).partnerId ?? "unknown";
 
-            final bgUrl = currentDeco?.backgroundItem?.imageUrl;
-            final clothesUrl = currentDeco?.clothesItem?.imageUrl;
+            /// 서버에서 받은 배경 URL
+            final bgUrl = currentDeco?.backgroundItem?.assetUrl;
+
+            /// 서버에서 받은 완성된 캐릭터(움직이는 GIF) URL
+            final characterUrl = currentDeco?.clothesItem?.assetUrl;
 
             final screens = [
               ChatReportListScreen(coupleId: couple['coupleId'] ?? 0),
@@ -368,6 +369,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     child: Column(
                       children: [
                         const SizedBox(height: 40),
+
+                        /// 유저 + 파트너 이름
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
@@ -375,12 +378,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Text(
-                                  "${user['nickname'] ?? '닉네임 없음'} ❤️ $partnerNickname",
+                                  "${user['nickname']} ❤️ $partnerNickname",
                                   style: const TextStyle(
                                     fontFamily: 'GowunBatang',
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -391,14 +393,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   style: const TextStyle(
                                     fontFamily: 'GowunBatang',
                                     fontSize: 16,
-                                    color: Colors.black54,
                                   ),
                                 ),
                               ],
-                            ),
+                            )
                           ],
                         ),
+
                         const SizedBox(height: 10),
+
+                        /// 코인 표시
                         Consumer(
                           builder: (context, ref, _) {
                             final coin = ref.watch(coinProvider);
@@ -413,24 +417,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     height: 30,
                                   ),
                                   const SizedBox(width: 8),
-                                  Flexible(
-                                    child: Text(
-                                      '$coin 개',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontFamily: 'GowunBatang',
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black87,
-                                      ),
+                                  Text(
+                                    '$coin 개',
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
                                     ),
-                                  ),
+                                  )
                                 ],
                               ),
                             );
                           },
                         ),
+
                         const SizedBox(height: 30),
+
+                        /// 대화 시작 버튼
                         GestureDetector(
                           onTap: () => _startChat(context, userId, partnerId),
                           child: Image.asset(
@@ -440,11 +442,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             fit: BoxFit.contain,
                           ),
                         ),
-                        const SizedBox(height: 5),
-                        if (clothesUrl != null && clothesUrl.isNotEmpty)
-                          Center(
+
+                        const SizedBox(height: 10),
+
+                        /// 서버 캐릭터 출력 (움직이는 GIF 1개)
+                        if (characterUrl != null && characterUrl.startsWith('http'))
+                          SizedBox(
+                            height: 350,
                             child: Image.network(
-                              clothesUrl,
+                              characterUrl,
                               fit: BoxFit.contain,
                             ),
                           ),
@@ -460,31 +466,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             return WillPopScope(
               onWillPop: () async => false,
               child: Scaffold(
-                body: bgUrl != null && bgUrl.isNotEmpty
-                    ? Container(
-                  decoration: BoxDecoration(
-                    image: DecorationImage(
-                      image: NetworkImage(bgUrl),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
+                body: Container(
+                  decoration: bgUrl != null && bgUrl.startsWith('http')
+                      ? BoxDecoration(
+                          image: DecorationImage(
+                            image: NetworkImage(bgUrl),
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : null, // 서버 URL 없으면 배경 없음
                   child: PageView(
                     controller: _pageController,
-                    onPageChanged: (index) => setState(() => _currentIndex = index),
+                    onPageChanged: (i) => setState(() => _currentIndex = i),
                     children: screens,
                   ),
-                )
-                    : PageView(
-                  controller: _pageController,
-                  onPageChanged: (index) => setState(() => _currentIndex = index),
-                  children: screens,
                 ),
                 bottomNavigationBar: BottomBar(
                   currentIndex: _currentIndex,
-                  onTap: (index) {
-                    setState(() => _currentIndex = index);
+                  onTap: (i) {
+                    setState(() => _currentIndex = i);
                     _pageController.animateToPage(
-                      index,
+                      i,
                       duration: const Duration(milliseconds: 300),
                       curve: Curves.easeInOut,
                     );
@@ -492,13 +494,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
             );
+
           },
-          loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-          error: (err, st) => const Scaffold(body: Center(child: Text('커플 정보를 불러올 수 없습니다.'))),
+          loading: () =>
+              const Scaffold(body: Center(child: CircularProgressIndicator())),
+          error: (e, st) =>
+              const Scaffold(body: Center(child: Text("커플 정보를 불러올 수 없습니다."))),
         );
       },
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (err, st) => const Scaffold(body: Center(child: Text('사용자 정보를 불러올 수 없습니다.'))),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, st) =>
+          const Scaffold(body: Center(child: Text("사용자 정보를 불러올 수 없습니다."))),
     );
   }
 }

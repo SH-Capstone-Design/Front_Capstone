@@ -146,65 +146,43 @@ class SettingScreen extends StatelessWidget {
           SafeArea(
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: size.width * 0.06),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(height: topPadding),
-                  // 로고
-                  SizedBox(
-                    height: logoHeight,
-                    child: Image.asset(
-                      AppConstants.logoPath,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                  SizedBox(height: size.height * 0.01),
-                  // 화면 제목
-                  const Center(
-                    child: Text(
-                      '⚙️ 설정',
-                      style: TextStyle(
-                        fontFamily: 'GowunBatang',
-                        fontSize: 30,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(height: topPadding),
+                    SizedBox(
+                      height: logoHeight,
+                      child: Image.asset(
+                        AppConstants.logoPath,
+                        fit: BoxFit.contain,
                       ),
                     ),
-                  ),
-                  const Spacer(flex: 2),
-                  // 버튼들
-                  RoundedButton(
-                    text: "디데이 설정",
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/couple-date');
-                    },
-                  ),
-                  SizedBox(height: size.height * 0.03),
-                  RoundedButton(
-                    text: "커플 관리",
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/couple-manage');
-                    },
-                  ),
-                  SizedBox(height: size.height * 0.03),
-                  RoundedButton(
-                    text: "내정보 수정",
-                    onPressed: () {
-                      Navigator.pushNamed(context, '/myprofile-setting');
-                    },
-                  ),
-                  SizedBox(height: size.height * 0.03),
-                  RoundedButton(
-                    text: "로그아웃",
-                    onPressed: () => _logout(context),
-                  ),
-                  SizedBox(height: size.height * 0.03),
-                  RoundedButton(
-                    text: "회원탈퇴",
-                    onPressed: () => _deleteAccount(context),
-                  ),
-                  const Spacer(flex: 3),
-                ],
+                    SizedBox(height: size.height * 0.01),
+                    const Center(
+                      child: Text(
+                        '⚙️ 설정',
+                        style: TextStyle(
+                          fontFamily: 'GowunBatang',
+                          fontSize: 30,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: size.height * 0.03),
+                    RoundedButton(text: "디데이 설정", onPressed: () { Navigator.pushNamed(context, '/couple-date'); }),
+                    SizedBox(height: size.height * 0.03),
+                    RoundedButton(text: "커플 관리", onPressed: () { Navigator.pushNamed(context, '/couple-manage'); }),
+                    SizedBox(height: size.height * 0.03),
+                    RoundedButton(text: "내정보 수정", onPressed: () { Navigator.pushNamed(context, '/myprofile-setting'); }),
+                    SizedBox(height: size.height * 0.03),
+                    RoundedButton(text: "로그아웃", onPressed: () => _logout(context)),
+                    SizedBox(height: size.height * 0.03),
+                    RoundedButton(text: "회원탈퇴", onPressed: () => _deleteAccount(context)),
+                    SizedBox(height: size.height * 0.05),
+                  ],
+                ),
               ),
             ),
           ),
